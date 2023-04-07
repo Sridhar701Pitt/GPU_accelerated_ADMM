@@ -51,7 +51,19 @@ void backprop(T *s_H, T *s_g, T *s_AB, T *s_AB2, T *s_P, T *s_p, \
 	// using the Tassa style regularization we end up with
 	// H = [A B]'*(P + rho*diag(in xx block of comp ? 0 : 1))*[A B] + H;      // g = [A B]'*[p + (P + diag(in x block of comp ? 0 : 1))d] + g;
 	// First we need to compute AB2 = AB'*(P + rho*diag(in u block));
-  	#pragma unroll
+
+	// ********************************************************************* 
+	// Matching with the variables in the paper:
+	// H -> Q_xx, Q_xu, Q_uu
+	// g -> Q_x, Q_u
+	// A -> f_x; B -> f_u; P -> V_xx'; p -> V_x'
+	// We dont use second-order system Jacobian f_xx, f_uu, f_xu
+	// H calculated based on equation 9 with regulariser term to increase bias towards last successful trajectory
+	// g calculated based on equation 10; d is defect term
+	// (???) + H term in H calculation -> corresponds to l_uu and l_xu (Cost function Hessians)
+  	// (???) cost gradients in Q_u, Q_x calculation ?
+	// ********************************************************************* 
+	#pragma unroll
   	for (int ky = starty; ky < DIM_ABT_c; ky += dy){
     	#pragma unroll
     	for (int kx = startx; kx < DIM_ABT_r; kx += dx){ // multiply column ky of P by row kx of AB' == column of AB place in (kx,ky) -> ky*DIM_ABT_r+kx of AB2
@@ -97,10 +109,20 @@ template <typename T>
 __host__ __device__ __forceinline__
 int computeKTdu_dim1(T *s_K, T *s_du, T *s_H, T *s_g, T rho, int ld_KT, \
 					 T *b_KT = nullptr, T *b_du = nullptr){
+	
+	// ***********************************************
+	// This function calculates K and k for the du IF DIMENSION OF U is 1
+	// In thsi case, Q_uu_inv is just 1 / scalar value
+	// ***********************************************
+	
   	// we need to make sure that s_H is > 0
   	if (s_H[OFFSET_HUU] <= 0){
     	return 1;
   	}
+
+	// ******************
+	// val somehow stroes Q_uu_inv which is used in the K calculation
+	// ****************** 
   	T val = 1.0/(s_H[OFFSET_HUU] + (!STATE_REG)*rho); // load into each thread
   	// then multiply through to the gu and hux blocks (computing K and du --> store to global memory)
   	int starty, dy, startx, dx; doubleLoopVals(&starty,&dy,&startx,&dx);
@@ -108,6 +130,11 @@ int computeKTdu_dim1(T *s_K, T *s_du, T *s_H, T *s_g, T rho, int ld_KT, \
   	for (int ky = starty; ky < DIM_Hux_c; ky += dy){
     	#pragma unroll
     	for (int kx = startx; kx < DIM_Hux_r; kx += dx){ // Huu_dim1 means DIM_Hux_r == 1 so only ky changes
+			// *********************************
+			// The line implements equation 4 of the paper to calculate the gain matrix K
+			// s_H[OFFSET_HUX_GU + kx + ky*DIM_H_r] corresponds to Q_ux
+			// s_K is the gain matrix K
+			// *********************************
     		s_K[kx + ky*DIM_K_r] = s_H[OFFSET_HUX_GU + kx + ky*DIM_H_r] * val;
     		// #ifdef  __CUDA_ARCH__
 	      		b_KT[ky + kx*ld_KT] = s_K[kx + ky*DIM_K_r]; // note the transpose
@@ -118,6 +145,10 @@ int computeKTdu_dim1(T *s_K, T *s_du, T *s_H, T *s_g, T rho, int ld_KT, \
   	for (int ky = starty; ky < DIM_gu_c; ky += dy){
     	#pragma unroll
     	for (int kx = startx; kx < DIM_gu_r; kx += dx){ // dim_gu_c == 1 so just limits to one set of threads
+
+			// **************************************************
+			// (???) Seems like this equation calculates only the feedforward term (small k) of the du 
+			// **************************************************
     		s_du[kx] = s_g[OFFSET_HUX_GU + kx] * val;
     		// #ifdef __CUDA_ARCH__
       			b_du[kx] = s_du[kx];
@@ -208,6 +239,11 @@ __host__ __device__ __forceinline__
 void computeKTdu(T *s_K, T *s_du, T *s_H, T *s_g, T *s_Huu, int ld_KT, \
 				 T *b_KT = nullptr, T *b_du = nullptr){
   	// Then we can compute K = invHuu*Hux -- not sure why we need to do backwards and invert but that seems to be the only way right now
+
+	// **********************************************************************************************
+	// This function is the general function for caluclation feedback K and feedforward k matrices 
+	// **********************************************************************************************
+
  	matMult<T,DIM_K_c,DIM_K_r,DIM_Huu_r,0,1>(s_K,DIM_K_r,s_Huu,DIM_Huu_r,&s_H[OFFSET_HUX_GU],DIM_H_r);
   	// We can then compute du = invHuu*gu
   	matVMult<T,DIM_du_r,DIM_Huu_r>(s_du,s_Huu,DIM_Huu_r,&s_g[OFFSET_HUX_GU]);
@@ -224,6 +260,14 @@ template <typename T>
 __host__ __device__ __forceinline__
 void computeCTG(T *s_P, T *s_p, T *s_H, T *s_g, T *s_K, T *s_du, T *s_AB2, \
                 int iter, int ld_P, T *b_Pprev = nullptr, T *b_pprev = nullptr){
+	
+	// *********************************************************************************************************
+	// NOTE: To match with paper, du -> small k (feedforward gain)
+	// Here we calculate V_x and V_xx to backpropagate to the previous time step -> Equation 5 of the paper
+	// pprev -> V_x
+	// Pprev -> V_xx
+	// *********************************************************************************************************
+
   	// we need to compute: pprev = gx + K'*Huu*du - Hxu*du - K'*gu || Pprev = Hxx + K'*Huu*K - Hxu*K  - K'*Hux;
   	// first we need to compute K'*Huu - Hxu -- note s_AB2 is now unused and can be reused so we save there
   	// so multiply column ky of Huu by row kx of K' = column kx of K and subtract (kx,ky) of Hxu and store in (kx,ky) of s_AB2
@@ -246,9 +290,14 @@ void computeCTG(T *s_P, T *s_p, T *s_H, T *s_g, T *s_K, T *s_du, T *s_AB2, \
       		T val = 0.0;
 			#pragma unroll
 			for (int j=0; j < DIM_K_r; j++){
+				// s_AB2*K - K'*Hux
 				val += s_AB2[kx + DIM_KT_r * j] * s_K[ky * DIM_K_r + j] - (STATE_REG ? s_K[kx * DIM_K_r + j] * s_H[OFFSET_HUX_GU + ky * DIM_H_r + j] : 0.0);
 			}
       		#ifdef __CUDA_ARCH__
+
+				// ********************
+				// Add H_xx (Q_xx) term here 
+				// *******************
       			s_P[kx+ky*DIM_P_r] = s_H[kx+ky*DIM_H_r] + val;
       			b_Pprev[kx+ky*ld_P] = s_P[kx+ky*DIM_P_r]; // if on GPU make sure to save to global mem
   			#else
@@ -378,9 +427,18 @@ void backPassKern(T *d_AB, T *d_P, T *d_p, T *d_Pp, T *d_pp, T *d_H, \
 	    // loop back in time
 	    for (int iter = iterCount; iter >= 0; iter--){
 	        // BACKPROP CTG store in s_H and s_g uses s_AB, s_AB2, s_P, s_p, b_H, b_g, b_AB, b_P, b_p, b_d, s_dx, rho
+
+			// ****************************************************
+			// Executes line 5 of the algorithm in paper
+			// ****************************************************
 	        backprop<T>(s_H,s_g,s_AB,s_AB2,s_P,s_p,b_d,rho,iter,ld_H,ld_AB,ld_P,b_H,b_g,b_AB);
+
 	        hd__syncthreads();
 	        // COMPUTE KT and du store in s_K, s_du, b_KT, b_du and use s_H, s_Huu, s_g, d_err, rho to compute
+
+			// ***************************************************
+			// Executes line 7 of the algorithm in the paper
+			// ***************************************************
 	        if (DIM_Huu_r == 1){ // (in dim1 case just 1/Huu)
 	            if(computeKTdu_dim1<T>(s_K,s_du,s_H,s_g,rho,ld_KT,b_KT,b_du)){d_err[block] = 1; return;}
 	        }
