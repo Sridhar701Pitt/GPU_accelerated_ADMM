@@ -328,6 +328,12 @@ void computeCTG(T *s_P, T *s_p, T *s_H, T *s_g, T *s_K, T *s_du, T *s_AB2, \
 template <typename T>
 __host__ __device__ __forceinline__
 void computeFSVars(T *b_ApBK, T *b_Bdu, T *s_AB, T *s_K, T *s_du, int ld_A){
+
+	// **********************************************************************************************************************
+	// In the paper, K and small k include the negative sign from Equation 4 of paper
+	// In the code when K and k are caluclated in computeKTdu functions, negatie sign is not included 
+	// Hence, when we caluclate the terms for the forward sweep (Equation 12 of the paper), we include negative signs here
+	// **********************************************************************************************************************
   	// ApBK (A - B*K) and Bdu (-B*du)
 	// matMult<T,DIM_A_r,DIM_A_c,DIM_K_r>(b_ApBK,ld_A,&s_AB[OFFSET_B],DIM_AB_r,s_K,DIM_K_r,-1.0,s_AB,DIM_AB_r);
 	// matVMult<T,DIM_d_r,DIM_du_r>(b_Bdu,&s_AB[OFFSET_B],DIM_AB_r,s_du);
@@ -451,11 +457,25 @@ void backPassKern(T *d_AB, T *d_P, T *d_p, T *d_Pp, T *d_pp, T *d_H, \
 	        hd__syncthreads();
 	        // COMPUTE CTG store in b_Pprev, b_pprev, s_P, s_p, compute from S_H, s_g, s_K, s_du, s_AB2
 	        // note: if first timestep can skip
+
+			// ***************************************************
+			// Executes line 8 of the algorithm in the paper
+			// ***************************************************
 	        if (iter != 0 || blockIdx.x != 0){computeCTG<T>(s_P,s_p,s_H,s_g,s_K,s_du,s_AB2,iter,ld_P,b_Pprev,b_pprev);}
 	        // COMPUTE vars for Forward Sweep store in b_ApBK, b_Bdu, compute from s_AB, s_K, s_du
 	        // note if M_F == 1 can skip
+
+			// **********************************************************************************************************
+			// Sets up variables for executing line 18 of the algorithm in the paper where the forward sweep is executed
+			// **********************************************************************************************************
 	        if (M_F > 1){computeFSVars<T>(b_ApBK,b_Bdu,s_AB,s_K,s_du,ld_A);}
+			
 	        // COMPUTE expected cost reduction store in s_dJ, compute from s_H, s_g, and s_du
+			// ******************************************************************************************************
+			// Executes line 6 of the algorithm in the paper to calculate "expected" cost redutcion for each alpha
+			// Actual cost reduction is calculated after the forward simulation
+			// Ratio of actual_cost_reduction to expected_cost_reduction is used to accept / reject alpha
+			// ******************************************************************************************************
 	        if (USE_EXP_RED){computeExpRed<T>(s_dJ,s_H,s_g,s_du);}
 	        // Then update the pointers for the next pass if we need to have one
 	        // We propagate back Pkp1 for each ABk so we store such that we can immediately do the next pass of math so

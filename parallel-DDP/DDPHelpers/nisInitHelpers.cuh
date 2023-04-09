@@ -219,8 +219,20 @@ void nextIterationSetupGPU(T **d_x, T **h_d_x, T *d_xp, T **d_u, T **h_d_u, T *d
 	// Compute derivatives for next pass(AB,H,g) and copy u into all us and run each in a separate stream
 	// also save x, u, J, P, p into prev variables (interleaving calls for maximum stream potential)
 	// these need to finish before the backpass
+
+	// ********************************************************************************************************
+	// Line 41 of the algorithm in paper
+	// integratorGradientKern kernel is chosen based whether we want numericla or analytical derivatives
+	// Analytical derivatives are defined in the plant files 
+	// Specific integration scheme is chosen for using the analytical gradients (euler,midpoint,range-kutta)
+	// ********************************************************************************************************		
 	integratorGradientKern<T><<<intDimms,dynDimms,0,streams[0]>>>(d_AB,h_d_x[*alphaIndex],h_d_u[*alphaIndex],d_I,d_Tbody,ld_x,ld_u,ld_AB);   
 	gpuErrchk(cudaPeekAtLastError());
+	
+	// ********************************************************************************************************
+	// Line 42 of the algorithm in paper
+	// Analytical gradients defined in the plant files are sued for cost gradient/hessian calculations
+	// ********************************************************************************************************
 	if(!EE_COST){costGradientHessianKern<T><<<1,NUM_TIME_STEPS,0,streams[1]>>>(h_d_x[*alphaIndex],h_d_u[*alphaIndex],d_g,d_H,d_xGoal,ld_x,ld_u,ld_H,ld_g);}
 	else{costGradientHessianKern<T><<<NUM_TIME_STEPS,dynDimms,0,streams[1]>>>(h_d_x[*alphaIndex],h_d_u[*alphaIndex],d_g,d_H,d_xGoal,ld_x,ld_u,ld_H,ld_g,d_Tbody);}
 	gpuErrchk(cudaPeekAtLastError());
@@ -412,6 +424,9 @@ __host__ __forceinline__
 int acceptRejectTrajGPU(T **h_d_x, T *d_xp, T **h_d_u, T *d_up, T **h_d_d, T *d_dp, \
                    		T *J, T *prevJ, T *dJ, T *rho, T *drho, int *alphaIndex, int *alphaOut, T *Jout, \
                    		int *iter, cudaStream_t *streams, int ld_x, int ld_u, int ld_d, int max_iter = MAX_ITER, int *updated = nullptr){
+	// ****************************
+	// Line 39 of the algorithm
+	// ****************************
 	// if failure increase rho, reset x,u,P,p,d
 	if (*dJ < 0){
 		*drho = max((*drho)*RHO_FACTOR,RHO_FACTOR); *rho = min((*rho)*(*drho), RHO_MAX);
@@ -426,7 +441,10 @@ int acceptRejectTrajGPU(T **h_d_x, T *d_xp, T **h_d_u, T *d_up, T **h_d_d, T *d_
 		if (*rho == RHO_MAX && !IGNORE_MAX_ROX_EXIT){if (DEBUG_SWITCH){printf("Exiting for maxRho\n");} return 1;}
 		else if (DEBUG_SWITCH){printf("[!]Forward Pass Failed Increasing Rho\n");}
 	}
-	// else try to decrease rho if we can and turn dJ into a percentage and save the cost to prevJ for next time and check for cost tol or max iter exit
+	// else try to decrease rho if we can and 
+	// turn dJ into a percentage and 
+	// save the cost to prevJ for next time and 
+	// check for cost tol or max iter exit
 	else {
 		*drho = min((*drho)/RHO_FACTOR, 1.0/RHO_FACTOR); *rho = max((*rho)*(*drho), RHO_MIN);
 		*dJ = (*dJ)/(*prevJ); *prevJ = J[*alphaIndex]; alphaOut[*iter] = *alphaIndex; Jout[*iter] = J[*alphaIndex];

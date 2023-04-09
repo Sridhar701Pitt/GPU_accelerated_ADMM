@@ -45,6 +45,9 @@ void runiLQR_GPU(T *x0, T *u0, T *KT0, T *P0, T *p0, T *d0, T *xGoal, T *Jout, i
 	// now start computing iterates
 	while(1){
 		// BACKWARD PASS //
+			// ****************************************************
+			// Executes line 4-13 of the algorithm in paper
+			// ****************************************************
 			gettimeofday(&start2,NULL);
 			// run full backward pass if it fails we have maxed our regularizer and need to exit
 			if (backwardPassGPU<T>(d_AB,d_P,d_p,d_Pp,d_pp,d_H,d_g,d_KT,d_du,h_d_d[*alphaIndex],d_ApBK,d_Bdu,
@@ -61,6 +64,9 @@ void runiLQR_GPU(T *x0, T *u0, T *KT0, T *P0, T *p0, T *d0, T *xGoal, T *Jout, i
 
 		// FORWARD PASS //
 			// FORWARD SWEEP //
+				// ****************************************************
+				// Executes line 16-20 of the algorithm in paper
+				// ****************************************************
 				gettimeofday(&start2,NULL);
 				// Sweep forward with all alpha in parallel if applicable
 				if (M_F > 1){
@@ -91,6 +97,9 @@ void runiLQR_GPU(T *x0, T *u0, T *KT0, T *P0, T *p0, T *d0, T *xGoal, T *Jout, i
 			}
 
 			// if we have gotten here then prep for next pass
+			// ****************************************************
+			// Executes line 41,42 of the algorithm in paper
+			// ****************************************************
 			nextIterationSetupGPU<T>(d_x,h_d_x,d_xp,d_u,h_d_u,d_up,d_d,h_d_d,d_dp,d_AB,d_H,d_g,d_P,d_p,d_Pp,d_pp,d_xGoal,alphaIndex,
 								     streams,dynDimms,intDimms,ld_x,ld_u,ld_d,ld_AB,ld_H,ld_g,ld_P,ld_p,d_I,d_Tbody);
 			gettimeofday(&end2,NULL);

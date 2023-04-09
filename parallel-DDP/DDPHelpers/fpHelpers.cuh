@@ -21,6 +21,9 @@ void forwardSweepInner(T *s_ApBK, T *Bk, T *dk, T *s_dx, T *xk, T *xpk, T alpha,
 	T *xkp1 = xk + ld_x;
 	int start, delta; singleLoopVals(&start,&delta);
    	for(int k=0; k<NUM_TIME_STEPS-1; k++){
+		// ****************************************************
+		// Calculate equation 12 of the paper in two stages
+		// ****************************************************
 		// compute the new state: xkp1 = xkp1 + (A - B*K)(xnew-x) - alpha*B*du + d
 		// we can do these in a series of parallel computations on seperate threads
 		// stage 1: ApBK = A - BK, dpBdu = d - B*du computed in backward pass so load them in
@@ -105,6 +108,10 @@ void defectKern(T **d_d, T *d_dT, int ld_d){
     }
     __syncthreads();
 	// then max it all up per alpha with a reduce pattern
+	// ******************************************************************************************************
+	// Maximum defect needs to be calculated for the trajectory 
+	// If max defect is very large, then the trajectory needs to be rejected based on Equation 11 of the paper
+	// ******************************************************************************************************
     reduceMax<T>(s_d);
     __syncthreads();
 	if (threadIdx.x == 0){d_dT[blockIdx.x] = s_d[0];}
@@ -232,17 +239,36 @@ void forwardSimInner(T *x, T *u, T *KT, T *du, T *d, T alpha, T *xp, T *s_dx, T 
 	bool tempFlag = (s_x != nullptr) && (s_u != nullptr);
 	for(unsigned int k=0; k < iters; k++){
 		// load in the x and u and compute controls
+
+		// *******************************************************************************
+		// Line 23 of the algorithm in the paper
+		// *******************************************************************************
 		computeControlKT<T>(uk,xk,xpk,KTk,duk,alpha,s_dx,ld_KT,s_u,s_x);
 		hd__syncthreads();
 		// then use this control to compute the new state
 		T *s_xkp1 = s_dx; // re-use this shared mem as we are done with it for this loop
+
+		// *******************************************************************************
+		// Line 24 of the algorithm in the paper
+		// *******************************************************************************
 		if(tempFlag){_integrator<T>(s_xkp1,s_x,s_u,s_qdd,d_I,d_Tbody,dt,s_eePos);}
 		else        {_integrator<T>(s_xkp1,xk,uk,s_qdd,d_I,d_Tbody,dt,s_eePos);}
 		hd__syncthreads();
 		// then write to global memory unless "final" state where we just use for defect on boundary
 		#pragma unroll
 		for (int ind = start; ind < STATE_SIZE; ind += delta){
+			// *******************************************************************************************************************************
+			// For every time_step (k):
+			// if k is within the block boundary (< N_F - 1), compute the next state (Line 24 of the algorithm )
+			// else if k is the last time step of the block (and not the last block M_F - 1), compute the defect (Line 30 of the algorithm)
+			// defects are probably initialised to zero and updated only as per above scheme
+			// *******************************************************************************************************************************
 			if (k < N_F - 1){xkp1[ind] = s_xkp1[ind];}
+
+			// *******************************************************************************
+			// Calculate the defects after forward simulation here
+			// Line 30 of the algorithm in the paper
+			// *******************************************************************************
 			else if (bInd < M_F - 1){dk[ind] = s_xkp1[ind] - xkp1[ind];}
 		}
 		#if EE_COST
@@ -339,6 +365,12 @@ void forwardSimGPU(T **d_x, T *d_xp, T *d_xp2, T **d_u, T *d_KT, T *d_du, T *alp
                    T *J, T *d_JT, T *d_xGoal, T *dJ, T *z, T prevJ, cudaStream_t *streams, dim3 dynDimms, dim3 FPBlocks, int *alphaIndex, \
                    int *ignore_defect, int ld_x, int ld_u, int ld_KT, int ld_du, int ld_d, T *d_I = nullptr, T *d_Tbody = nullptr){
 	// ACTUAL FORWARD SIM //
+
+	// *******************************************************************************
+	// FPBlocks is (num forward blocks, num_alpha)
+	// forwardSimKern kernel is run across all forward blocks and alpha in parallel
+	// Line 21 - 26 of the algorithm in the paper
+	// *******************************************************************************
 	forwardSimKern<T><<<FPBlocks,dynDimms,0,streams[0]>>>(d_x,d_u,d_KT,d_du,d_d,d_alpha,d_xp,ld_x,ld_u,ld_KT,ld_du,ld_d,d_I,d_Tbody,d_xGoal,d_JT);
 	gpuErrchk(cudaPeekAtLastError());
 
@@ -354,12 +386,20 @@ void forwardSimGPU(T **d_x, T *d_xp, T *d_xp2, T **d_u, T *d_KT, T *d_du, T *alp
 
 	// LINE SEARCH //
 	// then compute the cost and defect once the forward simulation finishes
+
+	// *************************************
+	// Line 33 of the algorithm in paper
+	// *************************************
 	#if !EE_COST
 		costKern<T><<<NUM_ALPHA,NUM_TIME_STEPS,NUM_TIME_STEPS*sizeof(T),streams[0]>>>(d_x,d_u,d_JT,d_xGoal,ld_x,ld_u);
 	#else
 		costKern<T,0><<<1,NUM_ALPHA,0,streams[0]>>>(d_JT);
 	#endif
 	gpuErrchk(cudaPeekAtLastError());
+
+	// ***************************************************
+	// For Equation 11 of the paper
+	// ***************************************************
 	if (M_F > 1){defectKern<<<NUM_ALPHA,NUM_TIME_STEPS,0,streams[1]>>>(d_d,d_dT,ld_d);	gpuErrchk(cudaPeekAtLastError());}
 
 	// then find the best J that shows improvement
@@ -369,6 +409,11 @@ void forwardSimGPU(T **d_x, T *d_xp, T *d_xp2, T **d_u, T *d_KT, T *d_du, T *alp
 	if (M_F > 1){gpuErrchk(cudaStreamSynchronize(streams[1])); gpuErrchk(cudaMemcpyAsync(d, d_dT, NUM_ALPHA*sizeof(T), cudaMemcpyDeviceToHost, streams[1]));}
 	*dJ = -1.0; *z = 0.0; T cdJ = -1.0; T cz = 0.0; bool JFlag, zFlag, dFlag;
 	gpuErrchk(cudaDeviceSynchronize());
+	
+	// **********************************************************************************************************
+	// Line 35 of the algorithm in paper
+	// Check acceptance criteria for each alpha based on Equations 7 and 11 from the paper + new Cost < old Cost
+	// **********************************************************************************************************
 	for (int i=0; i<NUM_ALPHA; i++){
 		cdJ = prevJ - J[i]; JFlag = cdJ >= 0.0 && cdJ > *dJ;
 		cz = cdJ / (alpha[i]*dJexp[0] + alpha[i]*alpha[i]/2.0*dJexp[1]); zFlag = USE_EXP_RED ? (EXP_RED_MIN < cz && cz < EXP_RED_MAX) : 1;
