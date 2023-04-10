@@ -8,19 +8,15 @@ Reproduce minimal GPU-accelerrated iLQR implementation for the pendulum plant
 template <typename T>
 __host__ //runs on host
 void testGPU(){
-    //Define project variables
-    
+  // Check commit from Yusuf
 
-    //Allocate memory for these variables
+  // Define project variables
 
+  // Allocate memory for these variables
 
-    //Run the iLQR GPU function
+  // Run the iLQR GPU function
 
-
-
-
-
-    // Free variables
+  // Free variables
 }
 
 
