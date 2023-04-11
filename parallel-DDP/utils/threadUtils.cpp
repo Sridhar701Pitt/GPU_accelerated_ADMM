@@ -4,6 +4,7 @@
  * Launching struct and core switching code
  *****************************************************************/
 #include <thread>
+#include <cstdio>
 #include <pthread.h>
 
 void setCPUForThread(std::thread thread[], int thread_id){

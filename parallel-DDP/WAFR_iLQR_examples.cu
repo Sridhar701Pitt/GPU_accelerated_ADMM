@@ -10,7 +10,7 @@ nvcc -std=c++11 -o iLQR.exe WAFR_iLQR_examples.cu utils/cudaUtils.cu utils/threa
 #include <algorithm>
 #include <iostream>
 
-#define TEST_ITERS 100
+#define TEST_ITERS 10
 #define ROLLOUT_FLAG 0
 #define RANDOM_MEAN 0.0
 #if PLANT == 1 // pend
@@ -325,7 +325,7 @@ void testGPU(){
    	}
    	// print final state
 	printf("Final state:\n");	for (int i = 0; i < STATE_SIZE; i++){printf("%15.5f ",x0[(NUM_TIME_STEPS-2)*ld_x + i]);}	printf("\n");
-	// printf("Final xtraj:\n");   for (int i = 0; i < NUM_TIME_STEPS; i++){printMat<T,1,DIM_x_r>(&x0[i*ld_x],1);}
+	printf("Final xtraj:\n");   for (int i = 0; i < NUM_TIME_STEPS; i++){printMat<T,1,DIM_x_r>(&x0[i*ld_x],1);}
 
 	// print all requested statistics
    	printJAlphaStats(Jout,alphaOut);

@@ -5,7 +5,12 @@
 
 # FROM ubuntu:latest
 # FROM nvidia/cuda:12.1.0-devel-ubuntu20.04
-FROM nvidia/cuda:11.4.3-devel-ubuntu18.04
+# FROM nvidia/cuda:12.1.0-devel-ubuntu22.04
+# FROM nvidia/cuda:11.7.0-cudnn8-devel-ubuntu22.04
+# ^^^ Didn't work when running iLQR.exe
+
+# FROM nvidia/cuda:11.4.3-devel-ubuntu18.04
+FROM nvidia/cuda:11.4.3-devel-ubuntu20.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -16,12 +21,17 @@ RUN apt-get update \
   && pip3 --no-cache-dir install --upgrade pip \
   && rm -rf /var/lib/apt/lists/*
 
-# INSTALL OTHER NECESSARY PACKAGES
-
-#install net-tools
+#TMUX, git, net-tools, nano
 RUN apt-get update
-RUN apt-get install -y net-tools
-RUN apt-get install -y nano
+RUN apt-get install -y tmux git net-tools nano
+#install 
+RUN apt-get update
+
+# Drake dependencies
+RUN apt-get install -y --no-install-recommends \
+      libpython3.8 libx11-6 libsm6 libxt6 libglib2.0-0
+
+RUN apt-get install -y python3.8-venv python3-tk
 
 #This installation supports gui in matplotlib
 # https://stackoverflow.com/questions/56656777/userwarning-matplotlib-is-currently-using-agg-which-is-a-non-gui-backend-so
@@ -30,13 +40,6 @@ RUN apt-get install -y nano
 # Video recording
 # RUN apt-get update
 # RUN apt-get install -y ffmpeg
-
-#TMUX
-RUN apt-get update
-RUN apt-get install -y tmux
-
-#git, tensorboard
-RUN apt-get install -y git
 
 #install requirements
 # COPY ./requirements.txt /tmp/requirements.txt

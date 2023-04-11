@@ -1,7 +1,7 @@
 # docker build command
 docker build -t python3:admm_cuda .
 
-docker run -it --rm --privileged --net=host --env-file ./.env -v /tmp/.X11-unix:/tmp/.X11-unix:rw -v "$(pwd)":/root/Python_ws --gpus all --shm-size=5.00gb python3:admm_cuda /bin/bash
+docker run -it --rm --privileged --net=host -e DISPLAY=$DISPLAY --env-file ./.env -v /tmp/.X11-unix:/tmp/.X11-unix:rw -v "$(pwd)":/root/Python_ws --gpus all --shm-size=5.00gb python3:admm_cuda /bin/bash
 # --shm-size param in the above command increases shared memory to 5gb for ray rllib performance
 # Useful Docker commands
 # Setting envs
