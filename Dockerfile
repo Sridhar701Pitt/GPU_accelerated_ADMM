@@ -22,16 +22,20 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 #TMUX, git, net-tools, nano
-RUN apt-get update
-RUN apt-get install -y tmux git net-tools nano
-#install 
-RUN apt-get update
+RUN apt-get update \
+  && apt-get install -y tmux git net-tools nano
+
+# for cv2
+RUN apt-get update \
+  && apt-get install ffmpeg libsm6 libxext6  -y
+
+RUN pip install numpy opencv-python scipy
 
 # Drake dependencies
-RUN apt-get install -y --no-install-recommends \
-      libpython3.8 libx11-6 libsm6 libxt6 libglib2.0-0
+# RUN apt-get install -y --no-install-recommends \
+#       libpython3.8 libx11-6 libsm6 libxt6 libglib2.0-0
 
-RUN apt-get install -y python3.8-venv python3-tk
+# RUN apt-get install -y python3.8-venv python3-tk
 
 #This installation supports gui in matplotlib
 # https://stackoverflow.com/questions/56656777/userwarning-matplotlib-is-currently-using-agg-which-is-a-non-gui-backend-so

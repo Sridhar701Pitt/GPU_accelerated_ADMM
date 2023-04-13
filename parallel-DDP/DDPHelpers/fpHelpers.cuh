@@ -22,6 +22,7 @@ void forwardSweepInner(T *s_ApBK, T *Bk, T *dk, T *s_dx, T *xk, T *xpk, T alpha,
 	int start, delta; singleLoopVals(&start,&delta);
    	for(int k=0; k<NUM_TIME_STEPS-1; k++){
 		// ****************************************************
+		// Line 18 of the algorithm
 		// Calculate equation 12 of the paper in two stages
 		// ****************************************************
 		// compute the new state: xkp1 = xkp1 + (A - B*K)(xnew-x) - alpha*B*du + d
@@ -136,7 +137,8 @@ T defectComp(T *d, int ld_d){
 // cost kern using external costFunc
 template <typename T>
 __global__
-void costKern(T **d_x, T **d_u, T *d_JT, T *d_xg, int ld_x, int ld_u){
+void costKern(T **d_x, T **d_u, T *d_JT, T *d_xg, int ld_x, int ld_u,
+			  T *x_bar, T *u_bar, T *x_lambda, T *u_lambda){
    	auto s_J = shared_memory_proxy<T>();
    	#pragma unroll
    	for (int a = blockIdx.x; a < NUM_ALPHA; a += gridDim.x){
@@ -145,7 +147,7 @@ void costKern(T **d_x, T **d_u, T *d_JT, T *d_xg, int ld_x, int ld_u){
       	#pragma unroll
       	for (int k = threadIdx.x; k < NUM_TIME_STEPS; k += blockDim.x){
       		T *xk = &xa[k*ld_x]; 	T *uk = &ua[k*ld_u];
-      		s_J[threadIdx.x] += costFunc(xk,uk,d_xg,k);
+      		s_J[threadIdx.x] += costFunc(xk,uk,d_xg,k,x_bar, u_bar, x_lambda, u_lambda);
       	}
       	__syncthreads();
    		// then sum it all up per alpha with a reduce pattern
@@ -363,7 +365,9 @@ template <typename T>
 __host__ __forceinline__
 void forwardSimGPU(T **d_x, T *d_xp, T *d_xp2, T **d_u, T *d_KT, T *d_du, T *alpha, T *d_alpha, T *d, T **d_d, T *d_dT, T *dJexp, T *d_dJexp, \
                    T *J, T *d_JT, T *d_xGoal, T *dJ, T *z, T prevJ, cudaStream_t *streams, dim3 dynDimms, dim3 FPBlocks, int *alphaIndex, \
-                   int *ignore_defect, int ld_x, int ld_u, int ld_KT, int ld_du, int ld_d, T *d_I = nullptr, T *d_Tbody = nullptr){
+                   int *ignore_defect, int ld_x, int ld_u, int ld_KT, int ld_du, int ld_d, 
+				   T *x_bar, T *u_bar, T *x_lambda, T *u_lambda,
+				   T *d_I = nullptr, T *d_Tbody = nullptr){
 	// ACTUAL FORWARD SIM //
 
 	// *******************************************************************************
@@ -391,7 +395,7 @@ void forwardSimGPU(T **d_x, T *d_xp, T *d_xp2, T **d_u, T *d_KT, T *d_du, T *alp
 	// Line 33 of the algorithm in paper
 	// *************************************
 	#if !EE_COST
-		costKern<T><<<NUM_ALPHA,NUM_TIME_STEPS,NUM_TIME_STEPS*sizeof(T),streams[0]>>>(d_x,d_u,d_JT,d_xGoal,ld_x,ld_u);
+		costKern<T><<<NUM_ALPHA,NUM_TIME_STEPS,NUM_TIME_STEPS*sizeof(T),streams[0]>>>(d_x,d_u,d_JT,d_xGoal,ld_x,ld_u,x_bar, u_bar, x_lambda, u_lambda);
 	#else
 		costKern<T,0><<<1,NUM_ALPHA,0,streams[0]>>>(d_JT);
 	#endif

@@ -14,6 +14,7 @@ void runiLQR_GPU(T *x0, T *u0, T *KT0, T *P0, T *p0, T *d0, T *xGoal, T *Jout, i
 				 T **d_d, T **h_d_d, T *d_dp, T *d_dT, T *d, T *d_ApBK, T *d_Bdu, T *d_dM,
 				 T *alpha, T *d_alpha, int *alphaIndex, T *d_JT, T *J, T *dJexp, T *d_dJexp, T *d_xGoal,
 				 int *err, int *d_err, int ld_x, int ld_u, int ld_P, int ld_p, int ld_AB, int ld_H, int ld_g, int ld_KT, int ld_du, int ld_d, int ld_A, 
+				 T *x_bar, T *u_bar, T *x_lambda, T *u_lambda,
 				 T *d_I = nullptr, T *d_Tbody = nullptr){
 	// INITIALIZE THE ALGORITHM	//
 	struct timeval start, end, start2, end2;	gettimeofday(&start,NULL);	gettimeofday(&start2,NULL);
@@ -29,7 +30,8 @@ void runiLQR_GPU(T *x0, T *u0, T *KT0, T *P0, T *p0, T *d0, T *xGoal, T *Jout, i
 	loadVarsGPU<T>(d_x,h_d_x,d_xp,x0,d_u,h_d_u,d_up,u0,d_P,d_Pp,P0,d_p,d_pp,p0,d_KT,KT0,d_du,d_dT,d_d,h_d_d,d0,d_AB,d_err,xGoal,d_xGoal,d_alpha,
 				   d_Tbody,d_I,d_JT,clearVarsFlag,forwardRolloutFlag,streams,dynDimms,ld_x,ld_u,ld_P,ld_p,ld_KT,ld_du,ld_d,ld_AB);
 	initAlgGPU<T>(d_x,h_d_x,d_xp,d_xp2,d_u,h_d_u,d_up,d_d,h_d_d,d_dp,d_dT,d_AB,d_H,d_g,d_KT,d_du,d_JT,&prevJ,d_xGoal,d_alpha,alphaIndex,
-			      alphaOut,Jout,streams,dynDimms,intDimms,forwardRolloutFlag,ld_x,ld_u,ld_d,ld_AB,ld_H,ld_g,ld_KT,ld_du,d_I,d_Tbody);
+			      alphaOut,Jout,streams,dynDimms,intDimms,forwardRolloutFlag,ld_x,ld_u,ld_d,ld_AB,ld_H,ld_g,ld_KT,ld_du,
+				  x_bar, u_bar, x_lambda, u_lambda, d_I,d_Tbody);
 	gettimeofday(&end2,NULL);
 	*initTime = time_delta_ms(start2,end2);
 	// INITIALIZE THE ALGORITHM //
@@ -81,7 +83,9 @@ void runiLQR_GPU(T *x0, T *u0, T *KT0, T *P0, T *p0, T *d0, T *xGoal, T *Jout, i
 				gettimeofday(&start2,NULL);
 				// Simulate forward with all alpha in parallel with MS, compute costs and line search
 				forwardSimGPU<T>(d_x,d_xp,d_xp2,d_u,d_KT,d_du,alpha,d_alpha,d,d_d,d_dT,dJexp,d_dJexp,J,d_JT,d_xGoal,&dJ,&z,prevJ,
-							     streams,dynDimms,FPBlocks,alphaIndex,&ignoreFirstDefectFlag,ld_x,ld_u,ld_KT,ld_du,ld_d,d_I,d_Tbody);
+							     streams,dynDimms,FPBlocks,alphaIndex,&ignoreFirstDefectFlag,ld_x,ld_u,ld_KT,ld_du,ld_d,
+								 x_bar, u_bar, x_lambda, u_lambda,
+								 d_I,d_Tbody);
 				gettimeofday(&end2,NULL);
 				simTime[iter-1] = time_delta_ms(start2,end2);
 			// FORWARD SIM //

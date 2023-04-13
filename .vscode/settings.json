@@ -1,6 +1,9 @@
 {
     "cmake.configureOnOpen": false,
     "files.associations": {
-        "cmath": "cpp"
+        "cmath": "cpp",
+        "type_traits": "cpp",
+        "iostream": "cpp",
+        "chrono": "cpp"
     }
 }

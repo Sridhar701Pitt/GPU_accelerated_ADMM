@@ -221,8 +221,8 @@ void nextIterationSetupGPU(T **d_x, T **h_d_x, T *d_xp, T **d_u, T **h_d_u, T *d
 	// these need to finish before the backpass
 
 	// ********************************************************************************************************
-	// Line 41 of the algorithm in paper
-	// integratorGradientKern kernel is chosen based whether we want numericla or analytical derivatives
+	// Line 42 of the algorithm in paper
+	// integratorGradientKern kernel is chosen based whether we want numerical or analytical dynamics derivatives
 	// Analytical derivatives are defined in the plant files 
 	// Specific integration scheme is chosen for using the analytical gradients (euler,midpoint,range-kutta)
 	// ********************************************************************************************************		
@@ -230,8 +230,8 @@ void nextIterationSetupGPU(T **d_x, T **h_d_x, T *d_xp, T **d_u, T **h_d_u, T *d
 	gpuErrchk(cudaPeekAtLastError());
 	
 	// ********************************************************************************************************
-	// Line 42 of the algorithm in paper
-	// Analytical gradients defined in the plant files are sued for cost gradient/hessian calculations
+	// Line 41 of the algorithm in paper
+	// Analytical cost gradients defined in the plant files are used for cost gradient/hessian calculations
 	// ********************************************************************************************************
 	if(!EE_COST){costGradientHessianKern<T><<<1,NUM_TIME_STEPS,0,streams[1]>>>(h_d_x[*alphaIndex],h_d_u[*alphaIndex],d_g,d_H,d_xGoal,ld_x,ld_u,ld_H,ld_g);}
 	else{costGradientHessianKern<T><<<NUM_TIME_STEPS,dynDimms,0,streams[1]>>>(h_d_x[*alphaIndex],h_d_u[*alphaIndex],d_g,d_H,d_xGoal,ld_x,ld_u,ld_H,ld_g,d_Tbody);}
@@ -312,6 +312,7 @@ void initAlgGPU(T **d_x, T **h_d_x, T *d_xp, T *d_xp2, T **d_u, T **h_d_u, T *d_
              	T *d_KT, T *d_du, T *d_JT, T *prevJ, T *d_xGoal, T *d_alpha, int *alphaIndex, int *alphaOut, T *Jout, \
              	cudaStream_t *streams, dim3 dynDimms, dim3 intDimms, int forwardRolloutFlag, \
              	int ld_x, int ld_u, int ld_d, int ld_AB, int ld_H, int ld_g, int ld_KT, int ld_du, \
+				T *x_bar, T *u_bar, T *x_lambda, T *u_lambda, \
              	T *d_I = nullptr, T *d_Tbody = nullptr){
 	if (forwardRolloutFlag){alphaOut[0] = 0;}	else{alphaOut[0] = -1;}
 	// compute initial derivatives in separate streams and save the current utraj, xtraj, xp, xp2, up, and d_d
@@ -333,7 +334,7 @@ void initAlgGPU(T **d_x, T **h_d_x, T *d_xp, T *d_xp2, T **d_u, T **h_d_u, T *d_
 	// get the cost and add epsilon in case the intialization results in zero update for the first pass
 	defectKern<T><<<NUM_ALPHA,NUM_TIME_STEPS,0,streams[5]>>>(d_d,d_dT,ld_d); gpuErrchk(cudaPeekAtLastError());
 	#if !EE_COST
-		costKern<T><<<1,NUM_TIME_STEPS,NUM_TIME_STEPS*sizeof(T),streams[6]>>>(d_x,d_u,d_JT,d_xGoal,ld_x,ld_u);
+		costKern<T><<<1,NUM_TIME_STEPS,NUM_TIME_STEPS*sizeof(T),streams[6]>>>(d_x,d_u,d_JT,d_xGoal,ld_x,ld_u,x_bar, u_bar, x_lambda, u_lambda);
 	#else
 		if (forwardRolloutFlag){costKern<T,0><<<1,1,0,streams[6]>>>(d_JT);}
 		else{costKern<T,1><<<1,NUM_TIME_STEPS,NUM_TIME_STEPS*sizeof(T),streams[1]>>>(d_JT);}

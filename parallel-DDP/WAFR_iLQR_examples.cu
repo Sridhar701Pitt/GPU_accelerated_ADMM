@@ -325,7 +325,15 @@ void testGPU(){
    	}
    	// print final state
 	printf("Final state:\n");	for (int i = 0; i < STATE_SIZE; i++){printf("%15.5f ",x0[(NUM_TIME_STEPS-2)*ld_x + i]);}	printf("\n");
-	printf("Final xtraj:\n");   for (int i = 0; i < NUM_TIME_STEPS; i++){printMat<T,1,DIM_x_r>(&x0[i*ld_x],1);}
+	
+	printf("Final xtraj:\n");  
+	printf("[");
+	for (int i = 0; i < NUM_TIME_STEPS; i++){
+		printf("[");
+		printMat<T,1,DIM_x_r>(&x0[i*ld_x],1,0,1);
+		printf("],");
+	}
+	printf("]");
 
 	// print all requested statistics
    	printJAlphaStats(Jout,alphaOut);

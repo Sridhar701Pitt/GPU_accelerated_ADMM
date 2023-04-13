@@ -5,6 +5,10 @@
  * User defined parameters
  *******************************************************************/
 
+// ADMM hyperparameters
+#define ADMM_MAX_ITERS 20
+#define RHO_ADMM 0.01
+
 // load in utility functions and threading/cuda definitions
 #include "utils/cudaUtils.h"
 #include "utils/threadUtils.h"
