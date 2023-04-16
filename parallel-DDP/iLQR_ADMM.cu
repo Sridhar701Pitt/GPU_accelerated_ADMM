@@ -161,6 +161,8 @@ void testGPU(){
 			d_I, d_Tbody);
 		// *********************************************************************************************************************************
 
+		printf("Selected alpha: %d \n", alphaIndex[0]);
+
 		// *********************************************************************************************************************************
 		// TODO: STEP 2: Update x_lambda, u_lambda
 		// x_lambda = x_lambda + x0 - x_bar;
@@ -310,8 +312,9 @@ void testGPU(){
 		// *********************************************************************************************************************************
 	}
 
-	// Experiment Setting Params: ADMM_MAX_ITERS, RHO_ADMM, MAX_ITER, M, TOTAL_TIME, u_lims[0], u_lims[1]
-	fprintf(file_config_constants,"%d\n%f\n%d\n%d\n%f\n%f\n%f\n", ADMM_MAX_ITERS, RHO_ADMM, MAX_ITER, M, TOTAL_TIME, u_lims[0], u_lims[1]);
+	// Experiment Setting Params: ADMM_MAX_ITERS, RHO_ADMM, MAX_ITER, M, TOTAL_TIME, u_lims[0], u_lims[1], NUM_TIME_STEPS, TIME_STEP
+	fprintf(file_config_constants,"%d\n%f\n%d\n%d\n%f\n%f\n%f\n%d\n%f\n", 
+			ADMM_MAX_ITERS, RHO_ADMM, MAX_ITER, M, TOTAL_TIME, u_lims[0], u_lims[1], NUM_TIME_STEPS, TIME_STEP);
 		
 	fclose(file_res_u);
 	fclose(file_res_x);

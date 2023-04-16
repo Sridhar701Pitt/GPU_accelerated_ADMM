@@ -6,7 +6,7 @@
  *******************************************************************/
 
 // ADMM hyperparameters
-#define ADMM_MAX_ITERS 10
+#define ADMM_MAX_ITERS 30
 #define RHO_ADMM 4.
 
 #define CLOCK_DELAY()   \
@@ -84,7 +84,7 @@ typedef float algType;
 #endif
 #define LINEAR_TRANSFORM_SWITCH 1 // 1 for on 0 for off
 #define ALPHA_BEST_SWITCH 1 // 1 for on 0 for off
-#define MAX_ITER 1000
+#define MAX_ITER 200
 #define MAX_SOLVER_TIME 10000.0
 #ifndef TOL_COST
 	#define TOL_COST 0.0001 // % decrease
@@ -96,7 +96,7 @@ typedef float algType;
 #define M_F M // how many multiple shooting intervals to use in the forward pass
 #define N_B (NUM_TIME_STEPS/M_B)
 #define N_F (NUM_TIME_STEPS/M_F)
-#define FORCE_PARALLEL 1 // 0 for better performance 1 for identical output for comp b/t CPU and GPU
+#define FORCE_PARALLEL 0 // 0 for better performance 1 for identical output for comp b/t CPU and GPU
 
 // regularizer options
 #define STATE_REG 1 // use Tassa state regularization (0 indicates standard Huu regularization)
@@ -132,7 +132,7 @@ typedef float algType;
 
 // task length / time
 #ifndef TOTAL_TIME
-	#define TOTAL_TIME 16.0
+	#define TOTAL_TIME 6.0
 #endif
 #ifndef NUM_TIME_STEPS
 	#define NUM_TIME_STEPS 128

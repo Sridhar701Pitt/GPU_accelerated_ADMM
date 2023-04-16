@@ -1,0 +1,15 @@
+// ADMM Parameters
+ADMM_MAX_ITERS
+RHO_ADMM
+
+// GPU DDP Parameters
+DDP_MAX_ITER
+M_B
+M_F
+NUM_ALPHA
+
+// Problem Parameters
+TOTAL_TIME
+NUM_TIME_STEPS
+x_lims
+u_lims

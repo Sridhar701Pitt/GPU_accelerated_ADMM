@@ -29,17 +29,18 @@ RUN apt-get update \
 RUN apt-get update \
   && apt-get install ffmpeg libsm6 libxext6  -y
 
-RUN pip install numpy opencv-python scipy
+RUN pip install numpy opencv-python scipy matplotlib
+RUN apt-get install -y python3-tk
 
 # Setup SSH server
-RUN apt-get update && apt-get install -y openssh-server
-RUN mkdir -p /var/run/sshd
-RUN sed -i '/^#/!s/PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
-#RUN service ssh restart
-RUN service ssh start
+# RUN apt-get update && apt-get install -y openssh-server
+# RUN mkdir -p /var/run/sshd
+# RUN sed -i '/^#/!s/PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+# #RUN service ssh restart
+# RUN service ssh start
 
 
-RUN echo "root:docker" |chpasswd
+# RUN echo "root:docker" |chpasswd
 
 # Drake dependencies
 # RUN apt-get install -y --no-install-recommends \
@@ -85,7 +86,7 @@ RUN echo "root:docker" |chpasswd
 
 #Set Work dir
 WORKDIR /root/Python_ws
-EXPOSE 22
+# EXPOSE 22
 
 #CMD ["/usr/sbin/sshd","-D"]
 #ENTRYPOINT ["python3"]
