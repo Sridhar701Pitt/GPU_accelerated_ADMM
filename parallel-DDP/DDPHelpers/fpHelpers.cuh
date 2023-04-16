@@ -138,16 +138,30 @@ T defectComp(T *d, int ld_d){
 template <typename T>
 __global__
 void costKern(T **d_x, T **d_u, T *d_JT, T *d_xg, int ld_x, int ld_u,
-			  T *x_bar, T *u_bar, T *x_lambda, T *u_lambda){
+			  T **x_bar, T **u_bar, T **x_lambda, T **u_lambda){
    	auto s_J = shared_memory_proxy<T>();
    	#pragma unroll
    	for (int a = blockIdx.x; a < NUM_ALPHA; a += gridDim.x){
    		// compute cost load into shared memory for reduction
       	s_J[threadIdx.x] = 0.0; T *xa = d_x[a]; T *ua = d_u[a];
-      	#pragma unroll
+		
+		// ADMM global copies and duals
+		T *ua_bar = u_bar[a];
+		T *xa_bar = x_bar[a];
+		T *ua_lambda = u_lambda[a];
+		T *xa_lambda = x_lambda[a];
+      	
+		#pragma unroll
       	for (int k = threadIdx.x; k < NUM_TIME_STEPS; k += blockDim.x){
-      		T *xk = &xa[k*ld_x]; 	T *uk = &ua[k*ld_u];
-      		s_J[threadIdx.x] += costFunc(xk,uk,d_xg,k,x_bar, u_bar, x_lambda, u_lambda);
+      		T *xk = &xa[k*ld_x]; 	T *uk = &ua[k*ld_u]; 
+			
+			// ADMM global copies and duals
+			T *uk_bar = &ua_bar[k*ld_u];
+			T *xk_bar = &xa_bar[k*ld_x];
+			T *uk_lambda = &ua_lambda[k*ld_u];
+			T *xk_lambda = &xa_lambda[k*ld_x];
+      		
+			s_J[threadIdx.x] += costFunc(xk,uk,d_xg,k, xk_bar, uk_bar, xk_lambda, uk_lambda);
       	}
       	__syncthreads();
    		// then sum it all up per alpha with a reduce pattern
@@ -366,7 +380,7 @@ __host__ __forceinline__
 void forwardSimGPU(T **d_x, T *d_xp, T *d_xp2, T **d_u, T *d_KT, T *d_du, T *alpha, T *d_alpha, T *d, T **d_d, T *d_dT, T *dJexp, T *d_dJexp, \
                    T *J, T *d_JT, T *d_xGoal, T *dJ, T *z, T prevJ, cudaStream_t *streams, dim3 dynDimms, dim3 FPBlocks, int *alphaIndex, \
                    int *ignore_defect, int ld_x, int ld_u, int ld_KT, int ld_du, int ld_d, 
-				   T *x_bar, T *u_bar, T *x_lambda, T *u_lambda,
+				   T **x_bar, T **u_bar, T **x_lambda, T **u_lambda,
 				   T *d_I = nullptr, T *d_Tbody = nullptr){
 	// ACTUAL FORWARD SIM //
 
@@ -395,7 +409,7 @@ void forwardSimGPU(T **d_x, T *d_xp, T *d_xp2, T **d_u, T *d_KT, T *d_du, T *alp
 	// Line 33 of the algorithm in paper
 	// *************************************
 	#if !EE_COST
-		costKern<T><<<NUM_ALPHA,NUM_TIME_STEPS,NUM_TIME_STEPS*sizeof(T),streams[0]>>>(d_x,d_u,d_JT,d_xGoal,ld_x,ld_u,x_bar, u_bar, x_lambda, u_lambda);
+		costKern<T><<<NUM_ALPHA,NUM_TIME_STEPS,NUM_TIME_STEPS*sizeof(T),streams[0]>>>(d_x,d_u,d_JT,d_xGoal,ld_x,ld_u, x_bar, u_bar, x_lambda, u_lambda);
 	#else
 		costKern<T,0><<<1,NUM_ALPHA,0,streams[0]>>>(d_JT);
 	#endif

@@ -4,6 +4,9 @@
 Compile using nvcc : 
 nvcc -std=c++11 -o iLQR.exe WAFR_iLQR_examples.cu utils/cudaUtils.cu utils/threadUtils.cpp -gencode arch=compute_61,code=sm_61 -rdc=true -O3
 
+nvcc -std=c++11 -o iLQR.exe iLQR_ADMM.cu utils/cudaUtils.cu utils/threadUtils.cpp -gencode arch=compute_61,code=sm_61 -rdc=true -O3
+
+
 run: ./iLQR.exe G
 
 source drake-setup/env/bin/activate

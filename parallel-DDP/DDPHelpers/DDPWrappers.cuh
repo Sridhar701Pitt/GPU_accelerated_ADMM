@@ -7,14 +7,17 @@
 
 template <typename T>
 __host__ __forceinline__
-void runiLQR_GPU(T *x0, T *u0, T *KT0, T *P0, T *p0, T *d0, T *xGoal, T *Jout, int *alphaOut, int forwardRolloutFlag, int clearVarsFlag, int ignoreFirstDefectFlag,
+void runiLQR_GPU(T *x0, T *u0, 
+				 T *x_bar_0, T *u_bar_0, T *x_lambda_0, T *u_lambda_0,
+				 T *KT0, T *P0, T *p0, T *d0, T *xGoal, T *Jout, int *alphaOut, int forwardRolloutFlag, int clearVarsFlag, int ignoreFirstDefectFlag,
 				 double *tTime, double *simTime, double *sweepTime, double *bpTime, double *nisTime, double *initTime, cudaStream_t *streams,
 				 T **d_x, T **h_d_x, T *d_xp, T *d_xp2, T **d_u, T **h_d_u, T *d_up,
 				 T *d_P, T *d_p, T *d_Pp, T *d_pp, T *d_AB, T *d_H, T *d_g, T *d_KT, T *d_du,
 				 T **d_d, T **h_d_d, T *d_dp, T *d_dT, T *d, T *d_ApBK, T *d_Bdu, T *d_dM,
 				 T *alpha, T *d_alpha, int *alphaIndex, T *d_JT, T *J, T *dJexp, T *d_dJexp, T *d_xGoal,
 				 int *err, int *d_err, int ld_x, int ld_u, int ld_P, int ld_p, int ld_AB, int ld_H, int ld_g, int ld_KT, int ld_du, int ld_d, int ld_A, 
-				 T *x_bar, T *u_bar, T *x_lambda, T *u_lambda,
+				 T **x_bar, T **u_bar, T **x_lambda, T **u_lambda, 
+				 T **h_x_bar, T **h_u_bar, T **h_x_lambda, T **h_u_lambda,
 				 T *d_I = nullptr, T *d_Tbody = nullptr){
 	// INITIALIZE THE ALGORITHM	//
 	struct timeval start, end, start2, end2;	gettimeofday(&start,NULL);	gettimeofday(&start2,NULL);
@@ -28,7 +31,10 @@ void runiLQR_GPU(T *x0, T *u0, T *KT0, T *P0, T *p0, T *d0, T *xGoal, T *Jout, i
 
 	// load and clear variables as requested and init the alg
 	loadVarsGPU<T>(d_x,h_d_x,d_xp,x0,d_u,h_d_u,d_up,u0,d_P,d_Pp,P0,d_p,d_pp,p0,d_KT,KT0,d_du,d_dT,d_d,h_d_d,d0,d_AB,d_err,xGoal,d_xGoal,d_alpha,
-				   d_Tbody,d_I,d_JT,clearVarsFlag,forwardRolloutFlag,streams,dynDimms,ld_x,ld_u,ld_P,ld_p,ld_KT,ld_du,ld_d,ld_AB);
+				   d_Tbody,d_I,d_JT,clearVarsFlag,forwardRolloutFlag,streams,dynDimms,ld_x,ld_u,ld_P,ld_p,ld_KT,ld_du,ld_d,ld_AB,
+				   x_bar_0, u_bar_0, x_lambda_0, u_lambda_0,
+				   x_bar, u_bar, x_lambda, u_lambda, 
+				   h_x_bar, h_u_bar, h_x_lambda, h_u_lambda);
 	initAlgGPU<T>(d_x,h_d_x,d_xp,d_xp2,d_u,h_d_u,d_up,d_d,h_d_d,d_dp,d_dT,d_AB,d_H,d_g,d_KT,d_du,d_JT,&prevJ,d_xGoal,d_alpha,alphaIndex,
 			      alphaOut,Jout,streams,dynDimms,intDimms,forwardRolloutFlag,ld_x,ld_u,ld_d,ld_AB,ld_H,ld_g,ld_KT,ld_du,
 				  x_bar, u_bar, x_lambda, u_lambda, d_I,d_Tbody);
@@ -129,7 +135,14 @@ void runiLQR_GPU(T *x0, T *u0, T *KT0, T *P0, T *p0, T *d0, T *xGoal, T *Jout, i
 
 		// Bring back the final state and control (and compute and bring back the defect)
 		gettimeofday(&start2,NULL);
-		storeVarsGPU(h_d_x,x0,h_d_u,u0,alphaIndex,streams,ld_x,ld_u,d_d,d_dT,d,ld_d);
+
+		// Pass ADMM global copies and duals for bringing back to the CPU
+		storeVarsGPU(h_d_x,x0,h_d_u,u0,alphaIndex,
+					 x_bar_0, u_bar_0, x_lambda_0, u_lambda_0,
+					 h_x_bar, h_u_bar, h_x_lambda, h_u_lambda,
+					 streams,ld_x,ld_u,
+					 d_d,d_dT,d,ld_d);
+
 		gettimeofday(&end2,NULL);
 		gettimeofday(&end,NULL);
 		*initTime += time_delta_ms(start2,end2);

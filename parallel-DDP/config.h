@@ -6,8 +6,22 @@
  *******************************************************************/
 
 // ADMM hyperparameters
-#define ADMM_MAX_ITERS 20
-#define RHO_ADMM 0.01
+#define ADMM_MAX_ITERS 10
+#define RHO_ADMM 4.
+
+#define CLOCK_DELAY()   \
+clock_t start = clock();   \
+clock_t now; \
+for (;;) { \
+	now = clock(); \
+	clock_t cycles = now > start ? now - start : now + (0xffffffff - start); \
+	if (cycles >= 100000000) { \
+		break; \
+	} \
+} \
+
+
+#define PIRAND ((T) 4*rand()*PI/RAND_MAX - 2*PI)
 
 // load in utility functions and threading/cuda definitions
 #include "utils/cudaUtils.h"
@@ -70,14 +84,14 @@ typedef float algType;
 #endif
 #define LINEAR_TRANSFORM_SWITCH 1 // 1 for on 0 for off
 #define ALPHA_BEST_SWITCH 1 // 1 for on 0 for off
-#define MAX_ITER 100
+#define MAX_ITER 1000
 #define MAX_SOLVER_TIME 10000.0
 #ifndef TOL_COST
 	#define TOL_COST 0.0001 // % decrease
 #endif
 
 // parallelization options
-#define M 4
+#define M 1
 #define M_B M // how many time steps to do in parallel on back pass
 #define M_F M // how many multiple shooting intervals to use in the forward pass
 #define N_B (NUM_TIME_STEPS/M_B)
@@ -118,7 +132,7 @@ typedef float algType;
 
 // task length / time
 #ifndef TOTAL_TIME
-	#define TOTAL_TIME 4.0
+	#define TOTAL_TIME 16.0
 #endif
 #ifndef NUM_TIME_STEPS
 	#define NUM_TIME_STEPS 128

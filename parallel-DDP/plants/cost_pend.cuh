@@ -27,7 +27,7 @@
 template <typename T>
 __host__ __device__ __forceinline__
 T costFunc(T *xk, T *uk, T *xgk, int k,
-           T *x_bar, T *u_bar, T *x_lambda, T *u_lambda){
+           T *x_bar, T *uk_bar, T *x_lambda, T *u_lambda){
     T cost = 0.0;
     #pragma unroll
     for (int i=0; i<STATE_SIZE; i++)
@@ -47,8 +47,13 @@ T costFunc(T *xk, T *uk, T *xgk, int k,
         {
             // TODO: Add (RHO_ADMM / 2) * l2_norm(u - (u_bar - u_lambda)) to the cost
             cost += (T) R*pow(uk[i],2);
-            // cost += (T) RHO_ADMM * abs(uk[i] - (u_bar[i] - u_lambda[i]));
+            // printf("u, u_lambda, ubar: %f %f %f\n", uk[i], uk_lambda[i], uk_bar[i]);
+            cost += (T) (RHO_ADMM / 2.) * pow(uk[i] - uk_bar[i] + u_lambda[i],2);
+
+            //CLOCK_DELAY();
         }
+    
+    // printf("\n ************************************\n");
     }
     return 0.5*cost;
 }

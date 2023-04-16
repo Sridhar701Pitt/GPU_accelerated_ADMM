@@ -31,6 +31,16 @@ RUN apt-get update \
 
 RUN pip install numpy opencv-python scipy
 
+# Setup SSH server
+RUN apt-get update && apt-get install -y openssh-server
+RUN mkdir -p /var/run/sshd
+RUN sed -i '/^#/!s/PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+#RUN service ssh restart
+RUN service ssh start
+
+
+RUN echo "root:docker" |chpasswd
+
 # Drake dependencies
 # RUN apt-get install -y --no-install-recommends \
 #       libpython3.8 libx11-6 libsm6 libxt6 libglib2.0-0
@@ -75,6 +85,8 @@ RUN pip install numpy opencv-python scipy
 
 #Set Work dir
 WORKDIR /root/Python_ws
+EXPOSE 22
 
-CMD ["tail", "-f", "/dev/null"]
+#CMD ["/usr/sbin/sshd","-D"]
 #ENTRYPOINT ["python3"]
+ENTRYPOINT bash

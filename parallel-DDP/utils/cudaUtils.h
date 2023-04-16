@@ -92,21 +92,19 @@
 /*** 2 MATRIX PRINTING CODE 2 ***/
 	#include <type_traits>
 	template <typename T, int M, int N>
-	__host__ __device__ void printMat(T *A, int lda, int newlnflag = 0, int saveToFile = 0){
+	__host__ __device__ void printMat(T *A, int lda, int newlnflag = 0, int saveToFile = 0, FILE *f = nullptr){
 		if (saveToFile){
-			FILE *f = fopen("mat.txt","a");
-			rewind(f);
 			if (!f)
 			{
 				perror("Could not open file");
-			}
-			for(int i=0; i<M; i++){
-				for(int j=0; j<N; j++){
-					fprintf(f,"%.4f ",(double)A[i + lda*j]);
+			} else {
+				for(int i=0; i<M; i++){
+					for(int j=0; j<N; j++){
+						fprintf(f,"%.4f ",(double)A[i + lda*j]);
+					}
+					fprintf(f,"\n");
 				}
-				fprintf(f,"\n");
 			}
-			fclose(f);
 		}
 		#pragma unroll
 		for(int i=0; i<M; i++){
