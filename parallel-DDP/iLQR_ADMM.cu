@@ -10,6 +10,7 @@ nvcc -std=c++11 -o iLQR.exe WAFR_iLQR_examples.cu utils/cudaUtils.cu utils/threa
 #include <algorithm>
 #include <iostream>
 #include <string>
+#include <math.h>
 
 #define ROLLOUT_FLAG 0
 #define RANDOM_MEAN 0.0
@@ -27,10 +28,39 @@ double nisTime[ADMM_MAX_ITERS*MAX_ITER];	double initTime[ADMM_MAX_ITERS];	algTyp
 std::default_random_engine randEng(time(0)); //seed
 std::normal_distribution<double> randDist(RANDOM_MEAN, RANDOM_STDEV); //mean followed by stdiv
 
+// state and control limits 
+float x_lims[2][2] = {{-1.57, 4.71}, 		// assume theta -> [-pi/2 , 3pi /2]
+				{-3.0, 3.0}};				// assume theta_dot -> [-10 , 10]
+float u_lims[2] = {-3.0, 3.0};			// assume u -> [-10 , 10]
+
+// Wraps an angle in radians to the range [-pi/2, 3*pi/2]
+float wrapAngle(float angle) {
+    const float lower_bound = x_lims[0][0]; // -pi/2
+    const float upper_bound = x_lims[0][1]; // 3*pi/2
+    const float range = upper_bound - lower_bound;
+
+    // Wrap the angle into the range
+    angle = fmod(angle - lower_bound, range);
+
+    // Make sure the angle is positive and add the lower bound
+    if (angle < 0) {
+        angle += range;
+    }
+
+    angle += lower_bound;
+
+    return angle;
+}
+
+
 template <typename T>
 __host__ __forceinline__
 void loadXU(T *x, T *u, T *xGoal, int ld_x, int ld_u,
-			T *x_bar, T *u_bar, T *x_lambda, T *u_lambda){
+			T *x_bar, T *u_bar, T *x_lambda, T *u_lambda,
+			T *rho_admm){
+	
+	rho_admm[0] = RHO_ADMM_INIT;
+	
 	for (int k=0; k<NUM_TIME_STEPS; k++){
 		T *xk = x + k*ld_x;
 		
@@ -92,6 +122,7 @@ void testGPU(){
 	T **x_bar, **h_x_bar;
 	T **u_lambda, **h_u_lambda;
 	T **x_lambda, **h_x_lambda;
+	T *rho_admm, *d_rho_admm;
 
 	// Allocate space and initialize the variables
 	allocateMemory_GPU<T>(&d_x, &h_d_x, &d_xp, &d_xp2, &d_u, &h_d_u, &d_up, &d_xGoal, &xGoal,
@@ -100,6 +131,7 @@ void testGPU(){
 				&d_JT, &J, &d_dJexp, &dJexp, &alpha, &d_alpha, &alphaIndex, &d_err, &err, 
 				&ld_x, &ld_u, &ld_P, &ld_p, &ld_AB, &ld_H, &ld_g, &ld_KT, &ld_du, &ld_d, &ld_A,
 				&u_bar, &h_u_bar, &x_bar, &h_x_bar, &u_lambda, &h_u_lambda, &x_lambda, &h_x_lambda, 
+				&rho_admm, &d_rho_admm,
 				&streams, &d_I, &d_Tbody);
 
 	// Variables for storing the quantities corresponding to the selected alpha for each iLQR iteration
@@ -112,13 +144,8 @@ void testGPU(){
 	T *x_bar_old = (T *)malloc(ld_x*NUM_TIME_STEPS*sizeof(T));
 	T *u_bar_old = (T *)malloc(ld_u*NUM_TIME_STEPS*sizeof(T));
 
-	// state and control limits 
-	T x_lims[2][2] = {{-1.57, 4.71}, 	// assume theta -> [-pi/2 , 3pi /2]
-					  {-10.0, 10.0}};	// assume theta_dot -> [-10 , 10]
-	T u_lims[2] = {-1.0, 1.0};			// assume u -> [-10 , 10]
-
 	// Initialise primal and dual variables with values
-	loadXU<T>(x0,u0,xGoal,ld_x,ld_u, x_bar_0, u_bar_0, x_lambda_0, u_lambda_0);
+	loadXU<T>(x0,u0,xGoal,ld_x,ld_u, x_bar_0, u_bar_0, x_lambda_0, u_lambda_0, rho_admm);
 
 	// Copy contents from x_bar,u_bar into x_bar_old,u_bar_old
 	memcpy(x_bar_old, x_bar_0, ld_x*NUM_TIME_STEPS*sizeof(T));
@@ -140,6 +167,9 @@ void testGPU(){
 	fclose(fopen("metric_plots/config_constants.txt","w"));
 	FILE *file_config_constants = fopen("metric_plots/config_constants.txt","a");
 
+	fclose(fopen("metric_plots/plot_rho_ADMM.txt","w"));
+	FILE *file_rho_ADMM = fopen("metric_plots/plot_rho_ADMM.txt","a");
+
   	// ADMM for loop starts here **************************************************************************************************
 	for (int i=0; i<ADMM_MAX_ITERS; i++)
 	{
@@ -158,10 +188,12 @@ void testGPU(){
 			err, d_err, ld_x, ld_u, ld_P, ld_p, ld_AB, ld_H, ld_g, ld_KT, ld_du, ld_d, ld_A,
 			x_bar, u_bar, x_lambda, u_lambda,
 			h_x_bar, h_u_bar, h_x_lambda, h_u_lambda,
+			rho_admm, d_rho_admm,
 			d_I, d_Tbody);
 		// *********************************************************************************************************************************
 
 		printf("Selected alpha: %d \n", alphaIndex[0]);
+		printf("x37_0, x37_1: %f, %f", (x0 + 37 * ld_x)[0], (x0 + 37 * ld_x)[1]);
 
 		// *********************************************************************************************************************************
 		// TODO: STEP 2: Update x_lambda, u_lambda
@@ -191,7 +223,7 @@ void testGPU(){
 		// *********************************************************************************************************************************
 
 		// *********************************************************************************************************************************
-		// TODO: STEP 3: 2nd ADMM sub-block project x_bar, u_bar into valid control limits
+		// TODO: STEP 3: 2nd ADMM sub-block project x_bar, u_bar into valid state and control limits
 		// We need to project the (x0 + x_lambda),(u0 + u_lambda) variable to the valid state and control set
 		
 		// x0 + x_lambda Projection
@@ -201,15 +233,20 @@ void testGPU(){
 			T *xk_lambda = x_lambda_0 + k*ld_x;
 			T *xk_bar = x_bar_0 + k*ld_x;
 
-			// Update x_bar[-]
-			if (xk[0] + xk_lambda[0] < x_lims[0][0])
-				{xk_bar[0] = x_lims[0][0]; }
+			// Update x_bar[0]
+			// if (xk[0] + xk_lambda[0] < x_lims[0][0])
+			// 	{xk_bar[0] = x_lims[0][0]; 
+
+			// 	// angle wrapping
+			// 	(xk_bar + (-x_lims[0][0])) % (2*PI)
+			// 	}
 			
-			else if (xk[0] + xk_lambda[0] > x_lims[0][1])
-				{xk_bar[0] = x_lims[0][1];	}
+			// else if (xk[0] + xk_lambda[0] > x_lims[0][1])
+			// 	{xk_bar[0] = x_lims[0][1];	}
 			
-			else
-				{xk_bar[0] = xk[0] + xk_lambda[0];	}
+			// else
+			// 	{xk_bar[0] = xk[0] + xk_lambda[0];	}
+			xk_bar[0] = wrapAngle(xk[0] + xk_lambda[0]);
 			
 			// Update x_bar[1]
 			if (xk[1] + xk_lambda[1] < x_lims[1][0])
@@ -254,16 +291,18 @@ void testGPU(){
 		// Calc residual_x
 		float res_x = 0;
 		float element_diff;
+		float element_diff_x0;
+		float element_diff_x1;
 		for (int k=0; k<NUM_TIME_STEPS; k++)
 		{	
 			T *xk = x0 + k*ld_x;
 			T *xk_bar = x_bar_0 + k*ld_x;
 
-			element_diff = xk[0] - xk_bar[0];
-			res_x += pow(element_diff,2);
-			element_diff = xk[1] - xk_bar[1];
-			res_x += pow(element_diff,2);
+			element_diff_x0 = xk[0] - xk_bar[0];
+			element_diff_x1 = xk[1] - xk_bar[1];
+			res_x += pow(element_diff_x0,2) + pow(element_diff_x1,2);
 		}
+		res_x = sqrt(res_x);
 
 		// Calc residual_u
 		float res_u = 0;
@@ -275,6 +314,7 @@ void testGPU(){
 			element_diff = uk[0] - uk_bar[0];
 			res_u += pow(element_diff,2);
 		}
+		res_u = sqrt(res_u);
 
 		// Calc residual_x_lambda
 		float res_x_lambda = 0;
@@ -284,11 +324,11 @@ void testGPU(){
 			T *xk_bar = x_bar_0 + k*ld_x;
 			T *xk_bar_old = x_bar_old + k*ld_x;
 
-			element_diff = xk_bar[0] - xk_bar_old[0];
-			res_x_lambda += pow(element_diff,2);
-			element_diff = xk_bar[1] - xk_bar_old[1];
-			res_x_lambda += pow(element_diff,2);
+			element_diff_x0 = xk_bar[0] - xk_bar_old[0];
+			element_diff_x1 = xk_bar[1] - xk_bar_old[1];
+			res_x_lambda += pow(element_diff_x0,2) + pow(element_diff_x1,2);
 		}
+		res_x_lambda = rho_admm[0] * sqrt(res_x_lambda); 
 
 		// Calc residual_u_lambda
 		float res_u_lambda = 0;
@@ -300,28 +340,86 @@ void testGPU(){
 			element_diff = uk_bar[0] - uk_bar_old[0];
 			res_u_lambda += pow(element_diff,2);
 		}
+		res_u_lambda = rho_admm[0] * sqrt(res_u_lambda);
 
 		// Copy contents from x_bar,u_bar into x_bar_old,u_bar_old
 		memcpy(x_bar_old, x_bar_0, ld_x*NUM_TIME_STEPS*sizeof(T));
 		memcpy(u_bar_old, u_bar_0, ld_u*NUM_TIME_STEPS*sizeof(T));
 
+		// *********************************************************************************************************************************
+		// TODO: STEP 5: Varying rho_admm based on SWA-ADMM paper
+		// if (i > K_SW){
+		// 	float res_primal, res_dual;
+			
+		// 	// According to paper, we should compare the total primal and dual variables
+		// 	// res_primal = res_u + res_x;
+		// 	// res_dual = res_u_lambda + res_x_lambda;
+			
+		// 	// MATLAB code compares only primal and dual residuals of u 
+		// 	res_primal = res_u;
+		// 	res_dual = res_u_lambda;
+			
+		// 	if (res_primal > MU_ADMM * res_dual){
+		// 		rho_admm[0] = rho_admm[0] * TAU_INCR;
+
+		// 		// MATLAB code mentions u_lambda = u_lambda/2 in this case
+		// 		for (int k=0; k<NUM_TIME_STEPS; k++)
+		// 		{	
+		// 			T *uk_lambda = u_lambda_0 + k*ld_u;					
+		// 			uk_lambda[0] = uk_lambda[0] / TAU_DECR;
+		// 		}
+
+		// 		// x_lambda is blowing up -> lets try to control it !
+		// 		// for (int k=0; k<NUM_TIME_STEPS; k++)
+		// 		// {	
+		// 		// 	T *xk_lambda = x_lambda_0 + k*ld_x;					
+		// 		// 	xk_lambda[0] = xk_lambda[0] / TAU_DECR;
+		// 		// 	xk_lambda[1] = xk_lambda[1] / TAU_DECR;
+		// 		// }
+		// 	} 
+			
+		// 	else if (res_dual > MU_ADMM * res_primal){
+		// 		rho_admm[0] = rho_admm[0] / TAU_DECR;
+
+		// 		// MATLAB code mentions u_lambda = u_lambda * 2 in this case
+		// 		for (int k=0; k<NUM_TIME_STEPS; k++)
+		// 		{	
+		// 			T *uk_lambda = u_lambda_0 + k*ld_u;					
+		// 			uk_lambda[0] = uk_lambda[0] * TAU_INCR;
+		// 		}
+
+		// 		// x_lambda is blowing up -> lets try to control it !
+		// 		// for (int k=0; k<NUM_TIME_STEPS; k++)
+		// 		// {	
+		// 		// 	T *xk_lambda = x_lambda_0 + k*ld_x;					
+		// 		// 	xk_lambda[0] = xk_lambda[0] * TAU_INCR;
+		// 		// 	xk_lambda[1] = xk_lambda[1] * TAU_INCR;
+		// 		// }
+		// 	}
+		// }
+		// *********************************************************************************************************************************
+
+		// Log residuals 
 		fprintf(file_res_u,"%.4f\n", res_u);
 		fprintf(file_res_x,"%.4f\n", res_x);
 		fprintf(file_res_x_lambda,"%.4f\n", res_x_lambda);
 		fprintf(file_res_u_lambda,"%.4f\n", res_u_lambda);
+		fprintf(file_rho_ADMM,"%.4f\n", rho_admm[0]);
+		
 		// *********************************************************************************************************************************
 	}
 
-	// Experiment Setting Params: ADMM_MAX_ITERS, RHO_ADMM, MAX_ITER, M, TOTAL_TIME, u_lims[0], u_lims[1], NUM_TIME_STEPS, TIME_STEP
-	fprintf(file_config_constants,"%d\n%f\n%d\n%d\n%f\n%f\n%f\n%d\n%f\n", 
-			ADMM_MAX_ITERS, RHO_ADMM, MAX_ITER, M, TOTAL_TIME, u_lims[0], u_lims[1], NUM_TIME_STEPS, TIME_STEP);
+	// Experiment Setting Params: ADMM_MAX_ITERS, RHO_ADMM, MAX_ITER, TOTAL_TIME, u_lims[0], u_lims[1], NUM_TIME_STEPS, TIME_STEP, M_B, M_F
+	fprintf(file_config_constants,"%d\n%f\n%d\n%f\n%f\n%f\n%d\n%f\n", 
+			ADMM_MAX_ITERS, RHO_ADMM_INIT, MAX_ITER, TOTAL_TIME, u_lims[0], u_lims[1], NUM_TIME_STEPS, TIME_STEP, M_B, M_F);
 		
 	fclose(file_res_u);
 	fclose(file_res_x);
 	fclose(file_res_x_lambda);
 	fclose(file_res_u_lambda);
 	fclose(file_config_constants);
-  // ADMM for loop ends here *************************************************************
+	fclose(file_rho_ADMM);
+  	// ADMM for loop ends here *************************************************************
   
 	// print final state
 	printf("Final state:\n");	for (int i = 0; i < STATE_SIZE; i++){printf("%15.5f ",x0[(NUM_TIME_STEPS-2)*ld_x + i]);}	printf("\n");

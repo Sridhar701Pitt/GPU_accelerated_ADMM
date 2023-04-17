@@ -7,7 +7,11 @@
 
 // ADMM hyperparameters
 #define ADMM_MAX_ITERS 30
-#define RHO_ADMM 4.
+#define RHO_ADMM_INIT 2.0
+#define TAU_INCR 1.2
+#define TAU_DECR 1.2
+#define MU_ADMM 2.
+#define K_SW 0
 
 #define CLOCK_DELAY()   \
 clock_t start = clock();   \
@@ -15,13 +19,10 @@ clock_t now; \
 for (;;) { \
 	now = clock(); \
 	clock_t cycles = now > start ? now - start : now + (0xffffffff - start); \
-	if (cycles >= 100000000) { \
+	if (cycles >= 1000000) { \
 		break; \
 	} \
 } \
-
-
-#define PIRAND ((T) 4*rand()*PI/RAND_MAX - 2*PI)
 
 // load in utility functions and threading/cuda definitions
 #include "utils/cudaUtils.h"
@@ -84,7 +85,7 @@ typedef float algType;
 #endif
 #define LINEAR_TRANSFORM_SWITCH 1 // 1 for on 0 for off
 #define ALPHA_BEST_SWITCH 1 // 1 for on 0 for off
-#define MAX_ITER 200
+#define MAX_ITER 100
 #define MAX_SOLVER_TIME 10000.0
 #ifndef TOL_COST
 	#define TOL_COST 0.0001 // % decrease
@@ -92,8 +93,8 @@ typedef float algType;
 
 // parallelization options
 #define M 1
-#define M_B M // how many time steps to do in parallel on back pass
-#define M_F M // how many multiple shooting intervals to use in the forward pass
+#define M_B 8 // how many time steps to do in parallel on back pass
+#define M_F 4 // how many multiple shooting intervals to use in the forward pass
 #define N_B (NUM_TIME_STEPS/M_B)
 #define N_F (NUM_TIME_STEPS/M_F)
 #define FORCE_PARALLEL 0 // 0 for better performance 1 for identical output for comp b/t CPU and GPU

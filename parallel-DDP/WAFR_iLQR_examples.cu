@@ -10,7 +10,7 @@ nvcc -std=c++11 -o iLQR.exe WAFR_iLQR_examples.cu utils/cudaUtils.cu utils/threa
 #include <algorithm>
 #include <iostream>
 
-#define TEST_ITERS 10
+#define TEST_ITERS 100
 #define ROLLOUT_FLAG 0
 #define RANDOM_MEAN 0.0
 #if PLANT == 1 // pend
@@ -322,18 +322,12 @@ void testGPU(){
 					d_x, h_d_x, d_xp, d_xp2, d_u, h_d_u, d_up, d_P, d_p, d_Pp, d_pp, d_AB, d_H, d_g, d_KT, d_du,
 					d_d, h_d_d, d_dp, d_dT, d, d_ApBK, d_Bdu, d_dM, alpha, d_alpha, alphaIndex, d_JT, J, dJexp, d_dJexp, d_xGoal,
 					err, d_err, ld_x, ld_u, ld_P, ld_p, ld_AB, ld_H, ld_g, ld_KT, ld_du, ld_d, ld_A, d_I, d_Tbody);
-   	}
+		
+		printf("Selected alpha: %d, %f", alphaIndex[0], alpha[alphaIndex[0]]);
+	}
    	// print final state
 	printf("Final state:\n");	for (int i = 0; i < STATE_SIZE; i++){printf("%15.5f ",x0[(NUM_TIME_STEPS-2)*ld_x + i]);}	printf("\n");
-	
-	// printf("Final xtraj:\n");  
-	// printf("[");
-	// for (int i = 0; i < NUM_TIME_STEPS; i++){
-	// 	printf("[");
-	// 	printMat<T,1,DIM_x_r>(&x0[i*ld_x],1,0,1);
-	// 	printf("],");
-	// }
-	// printf("]");
+	// printf("Final xtraj:\n");   for (int i = 0; i < NUM_TIME_STEPS; i++){printMat<T,1,DIM_x_r>(&x0[i*ld_x],1);}
 
 	// print all requested statistics
    	printJAlphaStats(Jout,alphaOut);

@@ -18,6 +18,7 @@ void runiLQR_GPU(T *x0, T *u0,
 				 int *err, int *d_err, int ld_x, int ld_u, int ld_P, int ld_p, int ld_AB, int ld_H, int ld_g, int ld_KT, int ld_du, int ld_d, int ld_A, 
 				 T **x_bar, T **u_bar, T **x_lambda, T **u_lambda, 
 				 T **h_x_bar, T **h_u_bar, T **h_x_lambda, T **h_u_lambda,
+				 T *rho_admm, T *d_rho_admm,
 				 T *d_I = nullptr, T *d_Tbody = nullptr){
 	// INITIALIZE THE ALGORITHM	//
 	struct timeval start, end, start2, end2;	gettimeofday(&start,NULL);	gettimeofday(&start2,NULL);
@@ -34,10 +35,13 @@ void runiLQR_GPU(T *x0, T *u0,
 				   d_Tbody,d_I,d_JT,clearVarsFlag,forwardRolloutFlag,streams,dynDimms,ld_x,ld_u,ld_P,ld_p,ld_KT,ld_du,ld_d,ld_AB,
 				   x_bar_0, u_bar_0, x_lambda_0, u_lambda_0,
 				   x_bar, u_bar, x_lambda, u_lambda, 
-				   h_x_bar, h_u_bar, h_x_lambda, h_u_lambda);
+				   h_x_bar, h_u_bar, h_x_lambda, h_u_lambda,
+				   rho_admm, d_rho_admm);
 	initAlgGPU<T>(d_x,h_d_x,d_xp,d_xp2,d_u,h_d_u,d_up,d_d,h_d_d,d_dp,d_dT,d_AB,d_H,d_g,d_KT,d_du,d_JT,&prevJ,d_xGoal,d_alpha,alphaIndex,
 			      alphaOut,Jout,streams,dynDimms,intDimms,forwardRolloutFlag,ld_x,ld_u,ld_d,ld_AB,ld_H,ld_g,ld_KT,ld_du,
-				  x_bar, u_bar, x_lambda, u_lambda, d_I,d_Tbody);
+				  x_bar, u_bar, x_lambda, u_lambda, 
+				  d_rho_admm,
+				  d_I,d_Tbody);
 	gettimeofday(&end2,NULL);
 	*initTime = time_delta_ms(start2,end2);
 	// INITIALIZE THE ALGORITHM //
@@ -91,6 +95,7 @@ void runiLQR_GPU(T *x0, T *u0,
 				forwardSimGPU<T>(d_x,d_xp,d_xp2,d_u,d_KT,d_du,alpha,d_alpha,d,d_d,d_dT,dJexp,d_dJexp,J,d_JT,d_xGoal,&dJ,&z,prevJ,
 							     streams,dynDimms,FPBlocks,alphaIndex,&ignoreFirstDefectFlag,ld_x,ld_u,ld_KT,ld_du,ld_d,
 								 x_bar, u_bar, x_lambda, u_lambda,
+								 d_rho_admm,
 								 d_I,d_Tbody);
 				gettimeofday(&end2,NULL);
 				simTime[iter-1] = time_delta_ms(start2,end2);

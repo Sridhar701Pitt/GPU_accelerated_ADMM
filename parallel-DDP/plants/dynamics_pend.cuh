@@ -13,7 +13,7 @@
 #define GRAVITY -9.81
 #define PI 3.1416
 #define M_CART 10
-#define M_POLE 1
+#define M_POLE 1.0
 #define L_POLE 0.5
 #define ML_POLE (M_POLE * L_POLE)
 #define MLL_POLE (ML_POLE * L_POLE)

@@ -313,6 +313,7 @@ void initAlgGPU(T **d_x, T **h_d_x, T *d_xp, T *d_xp2, T **d_u, T **h_d_u, T *d_
              	cudaStream_t *streams, dim3 dynDimms, dim3 intDimms, int forwardRolloutFlag, \
              	int ld_x, int ld_u, int ld_d, int ld_AB, int ld_H, int ld_g, int ld_KT, int ld_du, \
 				T **x_bar, T **u_bar, T **x_lambda, T **u_lambda, \
+				T *rho_admm, \
              	T *d_I = nullptr, T *d_Tbody = nullptr){
 	if (forwardRolloutFlag){alphaOut[0] = 0;}	else{alphaOut[0] = -1;}
 	// compute initial derivatives in separate streams and save the current utraj, xtraj, xp, xp2, up, and d_d
@@ -334,7 +335,7 @@ void initAlgGPU(T **d_x, T **h_d_x, T *d_xp, T *d_xp2, T **d_u, T **h_d_u, T *d_
 	// get the cost and add epsilon in case the intialization results in zero update for the first pass
 	defectKern<T><<<NUM_ALPHA,NUM_TIME_STEPS,0,streams[5]>>>(d_d,d_dT,ld_d); gpuErrchk(cudaPeekAtLastError());
 	#if !EE_COST
-		costKern<T><<<1,NUM_TIME_STEPS,NUM_TIME_STEPS*sizeof(T),streams[6]>>>(d_x,d_u,d_JT,d_xGoal,ld_x,ld_u,x_bar, u_bar, x_lambda, u_lambda);
+		costKern<T><<<1,NUM_TIME_STEPS,NUM_TIME_STEPS*sizeof(T),streams[6]>>>(d_x,d_u,d_JT,d_xGoal,ld_x,ld_u,x_bar, u_bar, x_lambda, u_lambda, rho_admm);
 	#else
 		if (forwardRolloutFlag){costKern<T,0><<<1,1,0,streams[6]>>>(d_JT);}
 		else{costKern<T,1><<<1,NUM_TIME_STEPS,NUM_TIME_STEPS*sizeof(T),streams[1]>>>(d_JT);}
@@ -539,7 +540,9 @@ void loadVarsGPU(T **d_x, T **h_d_x, T *d_xp, T *x0, T **d_u, T **h_d_u, T *d_up
 			  	 int ld_x, int ld_u, int ld_P, int ld_p, int ld_KT, int ld_du, int ld_d, int ld_AB, \
 				 T *x_bar_0, T *u_bar_0, T *x_lambda_0, T *u_lambda_0, \
 				 T **x_bar, T **u_bar, T **x_lambda, T **u_lambda, \
-				 T **h_x_bar, T **h_u_bar, T **h_x_lambda, T **h_u_lambda){
+				 T **h_x_bar, T **h_u_bar, T **h_x_lambda, T **h_u_lambda, \
+				 T *rho_admm, T *d_rho_admm){
+	
 	// load x and u onto the device (assumes passed in x and u are ld aligned -- and goal)
 	gpuErrchk(cudaMemcpyAsync(h_d_x[0], x0, ld_x*NUM_TIME_STEPS*sizeof(T), cudaMemcpyHostToDevice, streams[0]));
 	gpuErrchk(cudaMemcpyAsync(h_d_u[0], u0, ld_u*NUM_TIME_STEPS*sizeof(T), cudaMemcpyHostToDevice, streams[1]));
@@ -556,11 +559,15 @@ void loadVarsGPU(T **d_x, T **h_d_x, T *d_xp, T *x0, T **d_u, T **h_d_u, T *d_up
 	gpuErrchk(cudaMemcpyAsync(h_u_bar[0], u_bar_0, ld_u*NUM_TIME_STEPS*sizeof(T), cudaMemcpyHostToDevice, streams[1]));
 	gpuErrchk(cudaMemcpyAsync(h_x_lambda[0], x_lambda_0, ld_x*NUM_TIME_STEPS*sizeof(T), cudaMemcpyHostToDevice, streams[2]));
 	gpuErrchk(cudaMemcpyAsync(h_u_lambda[0], u_lambda_0, ld_u*NUM_TIME_STEPS*sizeof(T), cudaMemcpyHostToDevice, streams[3]));
+	
+	// load rho_admm_init into device rho_admm
+	gpuErrchk(cudaMemcpyAsync(d_rho_admm, rho_admm, sizeof(T), cudaMemcpyHostToDevice, streams[4]));
 
 	gpuErrchk(cudaStreamSynchronize(streams[0]));
 	gpuErrchk(cudaStreamSynchronize(streams[1]));
 	gpuErrchk(cudaStreamSynchronize(streams[2]));
 	gpuErrchk(cudaStreamSynchronize(streams[3]));
+	gpuErrchk(cudaStreamSynchronize(streams[4]));
 
 	int goalSize;	if (!EE_COST){goalSize = STATE_SIZE;}	else{goalSize = 6;}
 	gpuErrchk(cudaMemcpyAsync(d_xGoal, xGoal, goalSize*sizeof(T), cudaMemcpyHostToDevice, streams[4]));
@@ -732,6 +739,7 @@ void allocateMemory_GPU(T ***d_x, T ***h_d_x, T **d_xp, T **d_xp2, T ***d_u, T *
                         T **d_JT, T **J, T **d_dJexp, T **dJexp, T **alpha, T **d_alpha, int **alphaIndex, int **d_err, int **err,
 						int *ld_x, int *ld_u, int *ld_P, int *ld_p, int *ld_AB, int *ld_H, int *ld_g, int *ld_KT, int *ld_du, int *ld_d, int *ld_A,
                         T ***u_bar, T ***h_u_bar, T ***x_bar, T ***h_x_bar, T ***u_lambda, T ***h_u_lambda, T ***x_lambda, T ***h_x_lambda,
+						T **rho_admm, T **d_rho_admm,
 						cudaStream_t **streams, T **d_I = nullptr, T **d_Tbody = nullptr){
 
 	// note on device x,u is [NUM_ALPHA][SIZE*NUM_TIME_STEPS]
@@ -748,6 +756,7 @@ void allocateMemory_GPU(T ***d_x, T ***h_d_x, T **d_xp, T **d_xp2, T ***d_u, T *
 	gpuErrchk(cudaMalloc((void**)x_bar, NUM_ALPHA*sizeof(T*)));
 	gpuErrchk(cudaMalloc((void**)u_lambda, NUM_ALPHA*sizeof(T*)));
 	gpuErrchk(cudaMalloc((void**)x_lambda, NUM_ALPHA*sizeof(T*)));
+	// gpuErrchk(cudaMalloc((void**)rho_admm, sizeof(T*)));
 
 	// Initialise temporary variables for random initialisation of global copies and dual variables
 	*h_u_bar = (T **)malloc(NUM_ALPHA*sizeof(T*));
@@ -819,6 +828,10 @@ void allocateMemory_GPU(T ***d_x, T ***h_d_x, T **d_xp, T **d_xp2, T ***d_u, T *
 	gpuErrchk(cudaMemcpy(*d_alpha, *alpha, NUM_ALPHA*sizeof(T), cudaMemcpyHostToDevice));
 	gpuErrchk(cudaMalloc((void**)d_err,M_B*sizeof(int)));
 	*err = (int *)malloc(M_B*sizeof(int));
+
+	// mem allocation for rho_admm
+	*rho_admm = (T *)malloc(sizeof(T));
+	gpuErrchk(cudaMalloc((void**)d_rho_admm, sizeof(T)));
 
 	// put streams in order of priority
 	int priority, minPriority, maxPriority;

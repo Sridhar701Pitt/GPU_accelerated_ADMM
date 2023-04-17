@@ -138,7 +138,8 @@ T defectComp(T *d, int ld_d){
 template <typename T>
 __global__
 void costKern(T **d_x, T **d_u, T *d_JT, T *d_xg, int ld_x, int ld_u,
-			  T **x_bar, T **u_bar, T **x_lambda, T **u_lambda){
+			  T **x_bar, T **u_bar, T **x_lambda, T **u_lambda,
+			  T *d_rho_admm){
    	auto s_J = shared_memory_proxy<T>();
    	#pragma unroll
    	for (int a = blockIdx.x; a < NUM_ALPHA; a += gridDim.x){
@@ -161,7 +162,7 @@ void costKern(T **d_x, T **d_u, T *d_JT, T *d_xg, int ld_x, int ld_u,
 			T *uk_lambda = &ua_lambda[k*ld_u];
 			T *xk_lambda = &xa_lambda[k*ld_x];
       		
-			s_J[threadIdx.x] += costFunc(xk,uk,d_xg,k, xk_bar, uk_bar, xk_lambda, uk_lambda);
+			s_J[threadIdx.x] += costFunc(xk,uk,d_xg,k, xk_bar, uk_bar, xk_lambda, uk_lambda, d_rho_admm);
       	}
       	__syncthreads();
    		// then sum it all up per alpha with a reduce pattern
@@ -381,6 +382,7 @@ void forwardSimGPU(T **d_x, T *d_xp, T *d_xp2, T **d_u, T *d_KT, T *d_du, T *alp
                    T *J, T *d_JT, T *d_xGoal, T *dJ, T *z, T prevJ, cudaStream_t *streams, dim3 dynDimms, dim3 FPBlocks, int *alphaIndex, \
                    int *ignore_defect, int ld_x, int ld_u, int ld_KT, int ld_du, int ld_d, 
 				   T **x_bar, T **u_bar, T **x_lambda, T **u_lambda,
+				   T *d_rho_admm,
 				   T *d_I = nullptr, T *d_Tbody = nullptr){
 	// ACTUAL FORWARD SIM //
 
@@ -409,7 +411,7 @@ void forwardSimGPU(T **d_x, T *d_xp, T *d_xp2, T **d_u, T *d_KT, T *d_du, T *alp
 	// Line 33 of the algorithm in paper
 	// *************************************
 	#if !EE_COST
-		costKern<T><<<NUM_ALPHA,NUM_TIME_STEPS,NUM_TIME_STEPS*sizeof(T),streams[0]>>>(d_x,d_u,d_JT,d_xGoal,ld_x,ld_u, x_bar, u_bar, x_lambda, u_lambda);
+		costKern<T><<<NUM_ALPHA,NUM_TIME_STEPS,NUM_TIME_STEPS*sizeof(T),streams[0]>>>(d_x,d_u,d_JT,d_xGoal,ld_x,ld_u, x_bar, u_bar, x_lambda, u_lambda, d_rho_admm);
 	#else
 		costKern<T,0><<<1,NUM_ALPHA,0,streams[0]>>>(d_JT);
 	#endif
@@ -436,13 +438,16 @@ void forwardSimGPU(T **d_x, T *d_xp, T *d_xp2, T **d_u, T *d_KT, T *d_du, T *alp
 		cdJ = prevJ - J[i]; JFlag = cdJ >= 0.0 && cdJ > *dJ;
 		cz = cdJ / (alpha[i]*dJexp[0] + alpha[i]*alpha[i]/2.0*dJexp[1]); zFlag = USE_EXP_RED ? (EXP_RED_MIN < cz && cz < EXP_RED_MAX) : 1;
 		dFlag = M_F == 1 || *ignore_defect ? 1 :  d[i] < MAX_DEFECT_SIZE;
-		//printf("Alpha[%f] -> dJ[%f] -> z[%f], d[%f] so flags are J[%d]z[%d]f[%d] vs bdJ[%f]\n",alpha[i],cdJ,cz,d[i],JFlag,zFlag,dFlag,*dJ);
+		
 		if(JFlag && zFlag && dFlag){
+			//printf("Alpha[%f] -> dJ[%f] -> z[%f], d[%f] so flags are J[%d]z[%d]f[%d] vs bdJ[%f]\n",alpha[i],cdJ,cz,d[i],JFlag,zFlag,dFlag,*dJ);
 			if (d[i] < USE_MAX_DEFECT){*ignore_defect = 0;} // update the ignore defect
 			*alphaIndex = i; *dJ = cdJ; *z = cz; // update current best index, dJ, z
 			if (!ALPHA_BEST_SWITCH){break;} // pick first alpha strategy   
 		}
 	}
+	//printf("pickedAlpha: %f\n",alpha[*alphaIndex]);
+	
 	// LINE SEARCH //
 }
 
