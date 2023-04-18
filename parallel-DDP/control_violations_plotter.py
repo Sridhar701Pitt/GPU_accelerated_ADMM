@@ -16,7 +16,9 @@ plot_matrix = np.zeros((4,8))
 # MF_64 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_64.txt')
 # MF_128 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_128.txt')
 
-control = np.loadtxt('./metric_plots/plot_control.txt')
+print("Openign file...")
+
+control = np.loadtxt('./plot_control_s4_GPU_DDP_M4.txt')
 
 # Timing Stats: tADMM, t_i_ADMM[0], tTime[0], fsimTime[0], 
 # fsweepTime[0], bpTime[0], nisTime[0], initTime[0]

@@ -31,7 +31,7 @@ std::normal_distribution<double> randDist(RANDOM_MEAN, RANDOM_STDEV); //mean fol
 // state and control limits 
 float x_lims[2][2] = {{-1.57, 4.71}, 		// assume theta -> [-pi/2 , 3pi /2]
 					  {-10.0, 10.0}};		// assume theta_dot -> [-10 , 10]
-float u_lims[2] = {-4.0, 4.0};			// assume u -> [-10 , 10]
+float u_lims[2] = {-2.0, 2.0};			// assume u -> [-10 , 10]
 
 // Wraps an angle in radians to the range [-pi/2, 3*pi/2]
 float wrapAngle(float angle) {

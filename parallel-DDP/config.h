@@ -6,8 +6,8 @@
  *******************************************************************/
 
 // ADMM hyperparameters
-#define ADMM_MAX_ITERS 1
-#define RHO_ADMM_INIT 0.0
+#define ADMM_MAX_ITERS 30
+#define RHO_ADMM_INIT 0.21
 #define TAU_INCR 1.2
 #define TAU_DECR 1.2
 #define MU_ADMM 2.
@@ -136,7 +136,7 @@ typedef float algType;
 	#define TOTAL_TIME 6.0
 #endif
 #ifndef NUM_TIME_STEPS
-	#define NUM_TIME_STEPS 256
+	#define NUM_TIME_STEPS 128
 #endif
 #define TIME_STEP (TOTAL_TIME/(NUM_TIME_STEPS-1))
 #define get_time_us(time) (static_cast<double>(time.tv_sec * 1000000.0 + time.tv_usec))
