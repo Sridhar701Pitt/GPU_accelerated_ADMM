@@ -36,7 +36,7 @@
 //         // TODO: Add (RHO_ADMM / 2) * l2_norm(x - (x_bar - x_lambda)) to the cost
 //         cost += (T) (k == NUM_TIME_STEPS - 1 ? QFF(i) : QR(i))*pow(xk[i]-xgk[i],2);
         
-//         // cost += (T) (rho_admm[0] / 2.) * pow(xk[i] - x_bar[i] + x_lambda[i],2);    
+//         cost += (T) (rho_admm[0] / 2.) * pow(xk[i] - x_bar[i] + x_lambda[i],2);    
 //     }
     
 //     if (k != NUM_TIME_STEPS - 1)
@@ -50,7 +50,7 @@
 //             // TODO: Add (RHO_ADMM / 2) * l2_norm(u - (u_bar - u_lambda)) to the cost
 //             cost += (T) R*pow(uk[i],2);
 
-//             // cost += (T) (rho_admm[0] / 2.) * pow(uk[i] - uk_bar[i] + u_lambda[i],2);
+//             cost += (T) (rho_admm[0] / 2.) * pow(uk[i] - uk_bar[i] + u_lambda[i],2);
 //         }
 //     }
 //     return 0.5*cost;
@@ -113,10 +113,18 @@ T costFunc(T *xk, T *uk, T *xgk, int k,
             T *rho_admm){
     T cost = 0.0;
     #pragma unroll
-    for (int i=0; i<STATE_SIZE; i++){cost += (T) (k == NUM_TIME_STEPS - 1 ? QF : QR(i))*pow(xk[i]-xgk[i],2);}
+    for (int i=0; i<STATE_SIZE; i++)
+    {
+        cost += (T) (k == NUM_TIME_STEPS - 1 ? QF : QR(i))*pow(xk[i]-xgk[i],2);
+        //cost += (T) (rho_admm[0] / 2.) * pow(xk[i] - x_bar[i] + x_lambda[i],2); 
+    }
     if (k != NUM_TIME_STEPS - 1){
         #pragma unroll
-        for (int i=0; i<CONTROL_SIZE; i++){cost += (T) R*pow(uk[i],2);}
+        for (int i=0; i<CONTROL_SIZE; i++)
+        {
+            cost += (T) R*pow(uk[i],2);
+            //cost += (T) (rho_admm[0] / 2.) * pow(uk[i] - uk_bar[i] + u_lambda[i],2);
+        }
     }
     return 0.5*cost;
 }

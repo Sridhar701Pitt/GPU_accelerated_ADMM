@@ -7,43 +7,48 @@ import matplotlib.pyplot as plt
 # initialize 2D mat #M_F:1, 2, 4, 8, 16, 32 
 plot_matrix = np.zeros((4,8))
 
-MF_1 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_1.txt')
-MF_2 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_2.txt')
-MF_4 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_4.txt')
-MF_8 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_8.txt')
-MF_16 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_16.txt')
-MF_32 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_32.txt')
-MF_64 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_64.txt')
-MF_128 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_128.txt')
+# MF_1 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_1.txt')
+# MF_2 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_2.txt')
+# MF_4 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_4.txt')
+# MF_8 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_8.txt')
+# MF_16 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_16.txt')
+# MF_32 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_32.txt')
+# MF_64 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_64.txt')
+# MF_128 = np.loadtxt('./metric_plots/plot_times_s6_MF_256steps_128.txt')
+
+control = np.loadtxt('./metric_plots/plot_control.txt')
 
 # Timing Stats: tADMM, t_i_ADMM[0], tTime[0], fsimTime[0], 
 # fsweepTime[0], bpTime[0], nisTime[0], initTime[0]
-MFS = [MF_1, MF_2, MF_4, MF_8, MF_16, MF_32, MF_64, MF_128]
+# MFS = [MF_1, MF_2, MF_4, MF_8, MF_16, MF_32, MF_64, MF_128]
 
-for i in range(len(MFS)):
-    vals = np.array([MFS[i][3], MFS[i][4], MFS[i][5], MFS[i][1]])
-    plot_matrix[:, i] = vals
+# for i in range(len(MFS)):
+#     vals = np.array([MFS[i][3], MFS[i][4], MFS[i][5], MFS[i][1]])
+#     plot_matrix[:, i] = vals
 
 
-plt.figure(figsize=(16, 12))
+plt.figure(figsize=(6, 5))
 ax = plt.axes()
-lns1 = ax.plot(plot_matrix.T[:,0], 'b', label='fsim')
-lns2 = ax.plot(plot_matrix.T[:,1], 'g', label='fsweep')
-lns3 = ax.plot(plot_matrix.T[:,2], 'm', label='bp')
+ax.plot(control[:], 'b', label='control')
+ax.axhline(y=4.0, color='r', linestyle='dotted')
+ax.axhline(y=-4.0, color='r', linestyle='dotted')
+# lns1 = ax.plot(plot_matrix.T[:,0], 'b', label='fsim')
+# lns2 = ax.plot(plot_matrix.T[:,1], 'g', label='fsweep')
+# lns3 = ax.plot(plot_matrix.T[:,2], 'm', label='bp')
 #ax.legend(loc=0)
-ax.set_xticklabels(['','1', '2', '4', '8', '16', '32', '64', '128'])
+# ax.set_xticklabels(['','1', '2', '4', '8', '16', '32', '64', '128'])
 
-ax2 = ax.twinx()
-lns4 = ax2.plot(plot_matrix.T[:,3], 'r', label='tADMM')
+# ax2 = ax.twinx()
+# lns4 = ax2.plot(plot_matrix.T[:,3], 'r', label='tADMM')
 #ax2.legend(loc=0)
 # added these three lines
-lns = lns1+lns2+lns3+lns4
-labs = [l.get_label() for l in lns]
-ax.legend(lns, labs, loc=0)
+# lns = lns1+lns2+lns3+lns4
+# labs = [l.get_label() for l in lns]
+# ax.legend(lns, labs, loc=0)
 
-ax.set_xlabel('Forward Pass Blocks (M_F)')
-ax.set_ylabel('Time (ms)')
-ax2.set_ylabel('ADMM Time (ms)')
+ax.set_xlabel('Time Steps')
+ax.set_ylabel('Optimal Control (Nm)')
+# ax2.set_ylabel('ADMM Time (ms)')
 
 # plt.ylabel('residual')
 # plt.title('ok title')
