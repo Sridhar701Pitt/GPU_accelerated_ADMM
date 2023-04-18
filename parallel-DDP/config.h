@@ -6,8 +6,8 @@
  *******************************************************************/
 
 // ADMM hyperparameters
-#define ADMM_MAX_ITERS 30
-#define RHO_ADMM_INIT 2.0
+#define ADMM_MAX_ITERS 1
+#define RHO_ADMM_INIT 0.0
 #define TAU_INCR 1.2
 #define TAU_DECR 1.2
 #define MU_ADMM 2.
@@ -92,9 +92,9 @@ typedef float algType;
 #endif
 
 // parallelization options
-#define M 1
-#define M_B 8 // how many time steps to do in parallel on back pass
-#define M_F 4 // how many multiple shooting intervals to use in the forward pass
+#define M 4
+#define M_B M // how many time steps to do in parallel on back pass
+#define M_F M // how many multiple shooting intervals to use in the forward pass
 #define N_B (NUM_TIME_STEPS/M_B)
 #define N_F (NUM_TIME_STEPS/M_F)
 #define FORCE_PARALLEL 0 // 0 for better performance 1 for identical output for comp b/t CPU and GPU
@@ -136,7 +136,7 @@ typedef float algType;
 	#define TOTAL_TIME 6.0
 #endif
 #ifndef NUM_TIME_STEPS
-	#define NUM_TIME_STEPS 128
+	#define NUM_TIME_STEPS 256
 #endif
 #define TIME_STEP (TOTAL_TIME/(NUM_TIME_STEPS-1))
 #define get_time_us(time) (static_cast<double>(time.tv_sec * 1000000.0 + time.tv_usec))
